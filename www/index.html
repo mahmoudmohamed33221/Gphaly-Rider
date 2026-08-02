@@ -372,7 +372,8 @@
         .rdr-map-empty{padding:14px 16px;font-size:12px;color:var(--dim);text-align:center;}
         .leaflet-tooltip.rdr-tooltip{background:transparent;border:none;box-shadow:none;padding:0;transition:opacity .2s;}
         .leaflet-tooltip.rdr-tooltip::before{display:none;}
-        .rdr-tt-card{background:#111827;color:#fff;border:1.5px solid rgba(255,255,255,.35);border-radius:9px;padding:4px 9px;font-family:'Cairo',sans-serif;text-align:center;box-shadow:0 3px 10px rgba(0,0,0,.45);line-height:1.3;text-shadow:0 1px 2px rgba(0,0,0,.55);min-width:76px;}
+        .rdr-tt-card{position:relative;background:#111827;color:#fff;border:1.5px solid rgba(255,255,255,.35);border-radius:9px;padding:4px 9px;font-family:'Cairo',sans-serif;text-align:center;box-shadow:0 3px 10px rgba(0,0,0,.45);line-height:1.3;text-shadow:0 1px 2px rgba(0,0,0,.55);min-width:76px;}
+        .rdr-tt-card::after{content:'';position:absolute;left:50%;bottom:-6px;transform:translateX(-50%);width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:7px solid var(--tt-color, #111827);filter:drop-shadow(0 1.5px 1px rgba(0,0,0,.3));}
         .rdr-tt-bon{font-size:10.5px;font-weight:900;}
         .rdr-tt-name{font-size:10px;font-weight:700;}
         .rdr-tt-sub{font-size:9.5px;font-weight:600;opacity:.92;}
@@ -1873,7 +1874,7 @@ function buildTooltipCardHtml(bonKey, role) {
     var pos = role === 'shop' ? ref.shopPos : ref.custPos;
     var isActiveRoute = riderMapActiveRouteMarker && riderMapActiveRouteMarker.bonKey === bonKey && riderMapActiveRouteMarker.role === role;
     var detailed = isActiveRoute || isMapZoomDetailed() || riderMapFocusedBon === bonKey;
-    var html = '<div class="rdr-tt-card" style="background:' + color + ';border-color:' + color + ';">';
+    var html = '<div class="rdr-tt-card" style="background:' + color + ';border-color:' + color + ';--tt-color:' + color + ';">';
     html += '<div class="rdr-tt-bon">بون ' + bonKey + '</div>';
     if (detailed) {
         html += '<div class="rdr-tt-name">' + escHtml(meta.name || '') + '</div>';

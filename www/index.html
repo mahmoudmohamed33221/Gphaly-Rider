@@ -362,8 +362,24 @@
         .rdr-pin{width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(0,0,0,.5);border:2px solid #fff;}
         .rdr-pin i{transform:rotate(45deg);color:#fff;font-size:13px;}
         .rdr-live-dot{width:18px;height:18px;border-radius:50%;background:#4285F4;border:3px solid #fff;box-shadow:0 0 0 6px rgba(66,133,244,.28);}
-        .rdr-map-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);background:rgba(255,255,255,.04);padding:4px 9px;border-radius:8px;font-weight:700;}
+        .rdr-map-legend-item{display:flex;flex-direction:column;align-items:flex-start;gap:2px;font-size:11px;color:var(--muted);background:rgba(255,255,255,.04);padding:5px 10px;border-radius:9px;font-weight:700;cursor:pointer;border:1.5px solid transparent;transition:opacity .2s,border-color .2s;flex-shrink:0;}
+        .rdr-map-legend-item .rdr-legend-top{display:flex;align-items:center;gap:5px;}
+        .rdr-map-legend-item .rdr-dist{font-size:9px;color:var(--dim);font-weight:600;}
+        .rdr-map-legend-item.dim{opacity:.4;}
+        .rdr-map-legend-item.active{border-color:var(--accent);background:rgba(0,230,118,.1);opacity:1;}
         .rdr-map-empty{padding:14px 16px;font-size:12px;color:var(--dim);text-align:center;}
+        .leaflet-tooltip.rdr-tooltip{background:rgba(17,24,39,.94);color:#fff;border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:4px 9px;font-family:'Cairo',sans-serif;text-align:center;box-shadow:0 3px 10px rgba(0,0,0,.45);line-height:1.3;transition:opacity .2s;}
+        .rdr-tt-bon{font-size:10.5px;font-weight:900;color:var(--accent);}
+        .rdr-tt-name{font-size:10px;font-weight:700;color:#fff;}
+        .rdr-tt-sub{font-size:9.5px;font-weight:600;color:var(--muted);}
+        .rdr-tooltip.rdr-tooltip-focus{padding:7px 13px;}
+        .rdr-tooltip.rdr-tooltip-focus .rdr-tt-bon{font-size:13px;}
+        .rdr-tooltip.rdr-tooltip-focus .rdr-tt-name{font-size:11.5px;}
+        .rdr-tooltip.rdr-tooltip-focus .rdr-tt-sub{font-size:11px;}
+        .rdr-popup{font-family:'Cairo',sans-serif;text-align:center;font-size:12px;}
+        .rdr-route-btn{margin-top:7px;background:var(--accent);color:#04140A;border:none;padding:8px 14px;border-radius:8px;font-size:11.5px;font-weight:800;display:flex;align-items:center;gap:5px;cursor:pointer;width:100%;justify-content:center;}
+        .rdr-map-backbtn{position:absolute;bottom:16px;left:14px;z-index:1000;background:var(--card-up);color:#fff;border:1px solid rgba(255,255,255,.18);padding:10px 16px;border-radius:30px;font-size:12px;font-weight:800;align-items:center;gap:6px;box-shadow:0 4px 14px rgba(0,0,0,.45);}
+        .rdr-route-info{display:none;position:absolute;top:10px;left:10px;right:10px;z-index:1000;background:var(--card-up);border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:10px 12px;font-size:11.5px;color:#fff;align-items:center;justify-content:space-between;gap:8px;box-shadow:0 4px 14px rgba(0,0,0,.4);}
         .bnav-badge{position:absolute;top:6px;right:22%;background:var(--danger);color:#fff;font-size:9px;font-weight:800;min-width:17px;height:17px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 4px;animation:popIn .3s ease;}
         @keyframes popIn{from{transform:scale(0)}to{transform:scale(1)}}
 
@@ -1789,6 +1805,9 @@ var riderMapInstance = null;
 var riderMapMarkersLayer = null;
 var riderLiveMarker = null;
 var riderGeoWatchId = null;
+var riderRouteLayer = null;
+var riderMapMarkerRefs = {}; // { bon: { cust, shop, custPos, shopPos } }
+var riderMapFocusedBon = null;
 var RIDER_ORDER_COLORS = ['#F59E0B', '#111827', '#00E676', '#38BDF8', '#A855F7', '#EF4444', '#EAB308', '#EC4899'];
 var RIDER_MAP_DEFAULT_CENTER = [30.0444, 31.2357];
 
@@ -1811,8 +1830,28 @@ function getActiveOrdersForMap() {
     return list;
 }
 
+// 🆕 استخراج اسم المحل من نص الملاحظات (لو موجود بالصيغة "المحل المطلوب: اسم")
+function parseShopNameFromNotes(notes) {
+    if (!notes) return '';
+    var m = notes.toString().match(/المحل المطلوب:\s*([^📍\n\r]+)/);
+    return m ? m[1].trim() : '';
+}
+
+// 🆕 حساب المسافة بالكيلومتر بين نقطتين (Haversine)
+function haversineKm(lat1, lng1, lat2, lng2) {
+    var R = 6371;
+    var dLat = (lat2 - lat1) * Math.PI / 180;
+    var dLng = (lng2 - lng1) * Math.PI / 180;
+    var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
 function buildRiderPinIcon(color, iconClass) {
     return L.divIcon({ className: '', html: '<div class="rdr-pin" style="background:' + color + ';"><i class="fa-solid ' + iconClass + '"></i></div>', iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -30] });
+}
+
+function buildOrderTooltipHtml(bon, name, subLabel) {
+    return '<div class="rdr-tt-bon">بون ' + bon + '</div><div class="rdr-tt-name">' + escHtml(name || '') + '</div>' + (subLabel ? '<div class="rdr-tt-sub">' + escHtml(subLabel) + '</div>' : '');
 }
 
 function renderMapTab(animate) {
@@ -1821,9 +1860,13 @@ function renderMapTab(animate) {
     if (riderMapInstance && document.getElementById('riderMapEl')) { updateRiderMapMarkers(); return; }
     var animClass = animate ? ' tab-anim' : '';
     var html = '<div class="tab-pane on' + animClass + '" style="padding:0;height:100%;display:flex;flex-direction:column;">'
-        + '<div class="tab-head" style="padding:14px 16px;flex-shrink:0;"><h2><i class="fa-solid fa-map-location-dot" style="margin-left:6px;color:var(--accent);"></i>الخريطة</h2></div>'
-        + '<div id="riderMapLegend" style="padding:0 16px 8px;display:flex;flex-wrap:wrap;gap:8px;flex-shrink:0;"></div>'
-        + '<div style="flex:1;position:relative;min-height:340px;"><div id="riderMapEl" style="position:absolute;inset:0;"></div></div>'
+        + '<div class="tab-head" style="padding:10px 16px 6px;flex-shrink:0;"><h2 style="font-size:15px;"><i class="fa-solid fa-map-location-dot" style="margin-left:6px;color:var(--accent);"></i>الخريطة</h2></div>'
+        + '<div id="riderMapLegend" style="padding:0 16px 8px;display:flex;flex-wrap:nowrap;overflow-x:auto;gap:8px;flex-shrink:0;"></div>'
+        + '<div style="flex:1;position:relative;min-height:0;">'
+        +   '<div id="riderMapEl" style="position:absolute;inset:0;"></div>'
+        +   '<div id="riderRouteInfo" class="rdr-route-info"><span id="riderRouteInfoText"></span><button onclick="clearRiderRoute()" style="background:none;border:none;color:var(--danger);font-size:16px;padding:0 4px;"><i class="fa-solid fa-xmark"></i></button></div>'
+        +   '<button id="riderMapBackBtn" class="rdr-map-backbtn" style="display:none;" onclick="clearMapFocus()"><i class="fa-solid fa-rotate-left"></i> رجوع للوضع الطبيعي</button>'
+        + '</div>'
         + '</div>';
     main.innerHTML = html;
     initRiderMap();
@@ -1831,9 +1874,10 @@ function renderMapTab(animate) {
 
 function initRiderMap() {
     if (typeof L === 'undefined') { document.getElementById('riderMapEl').innerHTML = '<div class="rdr-map-empty"><i class="fa-solid fa-triangle-exclamation"></i><br>تعذر تحميل الخريطة، تأكد من الاتصال بالإنترنت</div>'; return; }
-    riderMapInstance = L.map('riderMapEl', { zoomControl: true, attributionControl: false }).setView(RIDER_MAP_DEFAULT_CENTER, 12);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(riderMapInstance);
+    riderMapInstance = L.map('riderMapEl', { zoomControl: true, attributionControl: false, dragging: true, touchZoom: true, scrollWheelZoom: true, doubleClickZoom: true, tap: true }).setView(RIDER_MAP_DEFAULT_CENTER, 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(riderMapInstance);
     riderMapMarkersLayer = L.layerGroup().addTo(riderMapInstance);
+    riderMapFocusedBon = null;
     updateRiderMapMarkers();
     startRiderLiveTracking();
 }
@@ -1848,35 +1892,139 @@ function updateRiderMapMarkers() {
     var legendEl = document.getElementById('riderMapLegend');
     var legendHtml = '';
     var singleOrder = orders.length === 1;
+    riderMapMarkerRefs = {};
     for (var i = 0; i < orders.length; i++) {
         var o = orders[i];
+        var bonKey = String(o.bon);
         var color = singleOrder ? null : RIDER_ORDER_COLORS[i % RIDER_ORDER_COLORS.length];
         var custColor = singleOrder ? '#00E676' : color;
         var shopColor = singleOrder ? '#F59E0B' : color;
         var custPos = parseLatLngFromLocationString(o.customerLocation);
         var shopPos = parseLatLngFromLocationString(o.storeLocation);
+        var shopName = parseShopNameFromNotes(o.notes);
+        riderMapMarkerRefs[bonKey] = { cust: null, shop: null, custPos: custPos, shopPos: shopPos };
         if (custPos) {
             var m1 = L.marker([custPos.lat, custPos.lng], { icon: buildRiderPinIcon(custColor, 'fa-user') }).addTo(riderMapMarkersLayer);
-            m1.bindPopup('<b>موقع العميل</b><br>بون: ' + o.bon + (o.name ? (' - ' + escHtml(o.name)) : ''));
+            m1.bindTooltip(buildOrderTooltipHtml(o.bon, o.name, o.landmark || '—'), { permanent: true, direction: 'top', offset: [0, -30], className: 'rdr-tooltip' });
+            m1.bindPopup('<div class="rdr-popup"><b>موقع العميل</b><br>بون: ' + o.bon + (o.name ? (' - ' + escHtml(o.name)) : '') + '<button class="rdr-route-btn" onclick="startRiderRoute(' + custPos.lat + ',' + custPos.lng + ',\'موقع العميل - بون ' + o.bon + '\')"><i class="fa-solid fa-diamond-turn-right"></i> اتجه نحو الموقع</button></div>');
+            m1.on('click', (function (bk) { return function () { toggleMapFocus(bk, true); }; })(bonKey));
+            riderMapMarkerRefs[bonKey].cust = m1;
             boundsPoints.push([custPos.lat, custPos.lng]);
         }
         if (shopPos) {
             var m2 = L.marker([shopPos.lat, shopPos.lng], { icon: buildRiderPinIcon(shopColor, 'fa-store') }).addTo(riderMapMarkersLayer);
-            m2.bindPopup('<b>موقع المحل</b><br>بون: ' + o.bon);
+            m2.bindTooltip(buildOrderTooltipHtml(o.bon, o.name, shopName || 'المحل'), { permanent: true, direction: 'top', offset: [0, -30], className: 'rdr-tooltip' });
+            m2.bindPopup('<div class="rdr-popup"><b>موقع المحل' + (shopName ? (' - ' + escHtml(shopName)) : '') + '</b><br>بون: ' + o.bon + '<button class="rdr-route-btn" onclick="startRiderRoute(' + shopPos.lat + ',' + shopPos.lng + ',\'موقع المحل - بون ' + o.bon + '\')"><i class="fa-solid fa-diamond-turn-right"></i> اتجه نحو الموقع</button></div>');
+            m2.on('click', (function (bk) { return function () { toggleMapFocus(bk, true); }; })(bonKey));
+            riderMapMarkerRefs[bonKey].shop = m2;
             boundsPoints.push([shopPos.lat, shopPos.lng]);
         }
         if (custPos || shopPos) {
-            legendHtml += '<div class="rdr-map-legend-item"><span style="width:10px;height:10px;border-radius:50%;background:' + (singleOrder ? '#00E676' : color) + ';display:inline-block;"></span>بون ' + o.bon + '</div>';
+            var shopCustKm = (custPos && shopPos) ? haversineKm(shopPos.lat, shopPos.lng, custPos.lat, custPos.lng).toFixed(1) : null;
+            var riderShopKm = (riderLiveMarker && shopPos) ? haversineKm(riderLiveMarker.getLatLng().lat, riderLiveMarker.getLatLng().lng, shopPos.lat, shopPos.lng).toFixed(1) : null;
+            legendHtml += '<div class="rdr-map-legend-item" id="legend-' + bonKey + '" data-bon="' + bonKey + '" onclick="toggleMapFocus(\'' + bonKey + '\')">'
+                + '<div class="rdr-legend-top"><span style="width:9px;height:9px;border-radius:50%;background:' + (singleOrder ? '#00E676' : color) + ';display:inline-block;"></span>بون ' + o.bon + '</div>'
+                + '<div class="rdr-dist"><i class="fa-solid fa-motorcycle"></i> <span id="dist-shop-' + bonKey + '">' + (riderShopKm ? riderShopKm + ' كم' : '—') + '</span> للمحل &nbsp; <i class="fa-solid fa-house"></i> ' + (shopCustKm ? shopCustKm + ' كم' : '—') + ' بعده للعميل</div>'
+                + '</div>';
         }
     }
     if (legendEl) { legendEl.innerHTML = legendHtml; }
     if (orders.length === 0) { if (legendEl) legendEl.innerHTML = '<div class="rdr-map-empty" style="padding:0;">مفيش طلبات شغالة دلوقتي عشان تتعرض على الخريطة</div>'; }
     if (boundsPoints.length) {
         if (riderLiveMarker) boundsPoints.push(riderLiveMarker.getLatLng());
-        try { riderMapInstance.fitBounds(boundsPoints, { padding: [40, 40], maxZoom: 16 }); } catch (e) {}
+        try { riderMapInstance.fitBounds(boundsPoints, { padding: [45, 45], maxZoom: 17 }); } catch (e) {}
     } else if (riderLiveMarker) {
         riderMapInstance.setView(riderLiveMarker.getLatLng(), 15);
     }
+    applyMapFocusVisuals();
+}
+
+// 🆕 تحديث خفيف لمسافة "الطيار للمحل" بس (بتتحرك مع كل نبضة GPS من غير إعادة رسم الدبابيس كلها)
+function updateRiderDistancesLive() {
+    if (!riderLiveMarker) return;
+    var pos = riderLiveMarker.getLatLng();
+    for (var bon in riderMapMarkerRefs) {
+        var ref = riderMapMarkerRefs[bon];
+        if (ref.shopPos) {
+            var el = document.getElementById('dist-shop-' + bon);
+            if (el) el.textContent = haversineKm(pos.lat, pos.lng, ref.shopPos.lat, ref.shopPos.lng).toFixed(1) + ' كم';
+        }
+    }
+}
+
+// 🆕 وضع التركيز: يخلي طلب واحد واضح والباقي شبه شفاف، ولو من زرار الدبوس كمان يفتح خيار الاتجاهات
+function toggleMapFocus(bon, fromMarkerClick) {
+    bon = String(bon);
+    if (riderMapFocusedBon === bon) { if (!fromMarkerClick) { clearMapFocus(); } return; }
+    riderMapFocusedBon = bon;
+    applyMapFocusVisuals();
+}
+
+function clearMapFocus() {
+    riderMapFocusedBon = null;
+    clearRiderRoute();
+    applyMapFocusVisuals();
+}
+
+function applyMapFocusVisuals() {
+    var backBtn = document.getElementById('riderMapBackBtn');
+    for (var bon in riderMapMarkerRefs) {
+        var ref = riderMapMarkerRefs[bon];
+        var isFocused = (riderMapFocusedBon === null) || (bon === riderMapFocusedBon);
+        [ref.cust, ref.shop].forEach(function (m) {
+            if (!m) return;
+            var iconEl = m.getElement ? m.getElement() : null;
+            if (iconEl) { iconEl.style.opacity = isFocused ? '1' : '0.32'; }
+            m.setZIndexOffset((riderMapFocusedBon && isFocused) ? 1000 : 0);
+            var container = (m._tooltip && m._tooltip._container) ? m._tooltip._container : null;
+            if (container) {
+                if (riderMapFocusedBon === null) { container.style.display = ''; container.classList.remove('rdr-tooltip-focus'); }
+                else if (isFocused) { container.style.display = ''; container.classList.add('rdr-tooltip-focus'); }
+                else { container.style.display = 'none'; }
+            }
+        });
+    }
+    document.querySelectorAll('.rdr-map-legend-item').forEach(function (el) {
+        el.classList.toggle('active', riderMapFocusedBon !== null && el.dataset.bon === riderMapFocusedBon);
+        el.classList.toggle('dim', riderMapFocusedBon !== null && el.dataset.bon !== riderMapFocusedBon);
+    });
+    if (backBtn) backBtn.style.display = riderMapFocusedBon ? 'flex' : 'none';
+}
+
+// 🆕 رسم مسار (اتجاهات) من مكان الطيار الحالي لأي نقطة (عميل أو محل)
+async function startRiderRoute(destLat, destLng, label) {
+    var infoEl = document.getElementById('riderRouteInfo');
+    var infoText = document.getElementById('riderRouteInfoText');
+    if (!riderLiveMarker) {
+        if (infoEl) infoEl.style.display = 'flex';
+        if (infoText) infoText.textContent = 'لسه مقدرش أحدد مكانك بدقة، استنى شوية وحاول تاني';
+        return;
+    }
+    if (riderMapInstance) { riderMapInstance.closePopup(); }
+    var from = riderLiveMarker.getLatLng();
+    if (infoEl) infoEl.style.display = 'flex';
+    if (infoText) infoText.textContent = 'جارٍ حساب أسرع مسار...';
+    try {
+        var url = 'https://router.project-osrm.org/route/v1/driving/' + from.lng + ',' + from.lat + ';' + destLng + ',' + destLat + '?overview=full&geometries=geojson';
+        var res = await fetch(url);
+        var data = await res.json();
+        if (!data.routes || !data.routes[0]) throw new Error('no route');
+        var coords = data.routes[0].geometry.coordinates.map(function (c) { return [c[1], c[0]]; });
+        if (riderRouteLayer) { riderMapInstance.removeLayer(riderRouteLayer); }
+        riderRouteLayer = L.polyline(coords, { color: '#00E676', weight: 6, opacity: 0.92, lineCap: 'round' }).addTo(riderMapInstance);
+        riderMapInstance.fitBounds(riderRouteLayer.getBounds(), { padding: [55, 55] });
+        var km = (data.routes[0].distance / 1000).toFixed(1);
+        var mins = Math.round(data.routes[0].duration / 60);
+        if (infoText) infoText.innerHTML = '<i class="fa-solid fa-route" style="margin-left:5px;"></i>' + escHtml(label) + ' — ' + km + ' كم — تقريبًا ' + mins + ' دقيقة';
+    } catch (e) {
+        if (infoText) infoText.textContent = 'تعذر حساب المسار دلوقتي، جرب تاني';
+    }
+}
+
+function clearRiderRoute() {
+    if (riderRouteLayer && riderMapInstance) { riderMapInstance.removeLayer(riderRouteLayer); riderRouteLayer = null; }
+    var infoEl = document.getElementById('riderRouteInfo');
+    if (infoEl) infoEl.style.display = 'none';
 }
 
 async function startRiderLiveTracking() {
@@ -1888,11 +2036,12 @@ async function startRiderLiveTracking() {
         var lat = pos.coords.latitude, lng = pos.coords.longitude;
         if (!riderMapInstance || !riderMapMarkersLayer) return;
         if (!riderLiveMarker) {
-            riderLiveMarker = L.marker([lat, lng], { icon: L.divIcon({ className: '', html: '<div class="rdr-live-dot"></div>', iconSize: [20, 20], iconAnchor: [10, 10] }), zIndexOffset: 1000, interactive: false }).addTo(riderMapMarkersLayer);
+            riderLiveMarker = L.marker([lat, lng], { icon: L.divIcon({ className: '', html: '<div class="rdr-live-dot"></div>', iconSize: [20, 20], iconAnchor: [10, 10] }), zIndexOffset: 1500, interactive: false }).addTo(riderMapMarkersLayer);
             riderMapInstance.setView([lat, lng], 14);
         } else {
             riderLiveMarker.setLatLng([lat, lng]);
         }
+        updateRiderDistancesLive();
     }, function (err) { console.warn('rider geo watch error', err); }, { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 });
 }
 
@@ -1903,7 +2052,7 @@ function stopRiderLiveTracking() {
 function teardownRiderMap() {
     stopRiderLiveTracking();
     if (riderMapInstance) { try { riderMapInstance.remove(); } catch (e) {} riderMapInstance = null; }
-    riderMapMarkersLayer = null; riderLiveMarker = null;
+    riderMapMarkersLayer = null; riderLiveMarker = null; riderRouteLayer = null; riderMapMarkerRefs = {}; riderMapFocusedBon = null;
 }
 // ============== نهاية تبويب الخريطة ==============
 

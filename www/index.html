@@ -1963,7 +1963,7 @@ function updateRiderMapMarkers() {
         };
         if (custPos) {
             var m1 = L.marker([custPos.lat, custPos.lng], { icon: buildRiderPinIcon(custColor, 'fa-user') }).addTo(riderMapMarkersLayer);
-            m1.bindTooltip('', { permanent: true, direction: 'top', offset: [0, -30], className: 'rdr-tooltip' });
+            m1.bindTooltip('', { permanent: true, direction: 'top', offset: [0, -26], className: 'rdr-tooltip' });
             m1.setTooltipContent(buildTooltipCardHtml(bonKey, 'cust'));
             m1.on('click', (function (bk) { return function () { onOrderMarkerClick(bk, 'cust'); }; })(bonKey));
             riderMapMarkerRefs[bonKey].cust = m1;
@@ -1971,7 +1971,7 @@ function updateRiderMapMarkers() {
         }
         if (shopPos) {
             var m2 = L.marker([shopPos.lat, shopPos.lng], { icon: buildRiderPinIcon(shopColor, 'fa-store') }).addTo(riderMapMarkersLayer);
-            m2.bindTooltip('', { permanent: true, direction: 'top', offset: [0, -30], className: 'rdr-tooltip' });
+            m2.bindTooltip('', { permanent: true, direction: 'top', offset: [0, -26], className: 'rdr-tooltip' });
             m2.setTooltipContent(buildTooltipCardHtml(bonKey, 'shop'));
             m2.on('click', (function (bk) { return function () { onOrderMarkerClick(bk, 'shop'); }; })(bonKey));
             riderMapMarkerRefs[bonKey].shop = m2;

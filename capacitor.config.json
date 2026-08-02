@@ -1,0 +1,15 @@
+{
+  "appId": "com.mgaper.gphalyrider",
+  "appName": "جبهالي ريدر - Gphaly Rider",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 300,
+      "launchAutoHide": true,
+      "backgroundColor": "#0B0F19",
+      "showSpinner": false,
+      "androidScaleType": "CENTER_CROP"
+    }
+  }
+}

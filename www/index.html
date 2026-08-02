@@ -6,6 +6,10 @@
     <title>جبهالي ريدر</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <!-- 🆕 كوبريدج Capacitor لازم يتحمّل عشان window.Capacitor.Plugins.Geolocation يشتغل -->
+    <script src="capacitor.js"></script>
     <style>
         :root {
             --bg: #0B0F19;
@@ -345,6 +349,21 @@
         .bnav-item.on span{color:var(--accent);}
         
         .bnav-item.on::before{content:'';position:absolute;bottom:4px;left:50%;transform:translateX(-50%);width:24px;height:3px;background:var(--accent);border-radius:4px;}
+
+        /* 🆕 زراير لوكيشن العميل / المحل جوه كارت الطلب */
+        .oc-loc-row{position:relative;z-index:1;display:flex;gap:8px;margin:0 16px 10px;flex-wrap:wrap;}
+        .oc-loc-btn{flex:1;min-width:130px;display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 10px;border-radius:10px;font-size:11.5px;font-weight:800;text-decoration:none;border:1px solid;}
+        .oc-loc-btn.cust{color:var(--accent);background:rgba(0,230,118,.08);border-color:rgba(0,230,118,.25);}
+        .oc-loc-btn.shop{color:var(--warn);background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.25);}
+        .oc-loc-btn:active{transform:scale(.97);}
+
+        /* 🆕 تبويب الخريطة */
+        #riderMapEl{background:#1a1a1a;}
+        .rdr-pin{width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(0,0,0,.5);border:2px solid #fff;}
+        .rdr-pin i{transform:rotate(45deg);color:#fff;font-size:13px;}
+        .rdr-live-dot{width:18px;height:18px;border-radius:50%;background:#4285F4;border:3px solid #fff;box-shadow:0 0 0 6px rgba(66,133,244,.28);}
+        .rdr-map-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);background:rgba(255,255,255,.04);padding:4px 9px;border-radius:8px;font-weight:700;}
+        .rdr-map-empty{padding:14px 16px;font-size:12px;color:var(--dim);text-align:center;}
         .bnav-badge{position:absolute;top:6px;right:22%;background:var(--danger);color:#fff;font-size:9px;font-weight:800;min-width:17px;height:17px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 4px;animation:popIn .3s ease;}
         @keyframes popIn{from{transform:scale(0)}to{transform:scale(1)}}
 
@@ -638,7 +657,7 @@
 </div>
 
 <script>
-var GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby79gC1sgZJqiLzvZlpabHqro6YT_6dekroz2W3ltU-T26fXV8zmg_KioVU17sHj21BHw/exec";
+var GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwqY6kcM9jR5cfvv4drTinbsWYqLHb9ASr2EIP47aqMUHyljAqaYLabRxmks7PIM_k45w/exec";
 var APP_VERSION = "3.0.1"; // لازم يطابق قيمة الخلية D2 في الشيت، وإلا هيظهر تحديث إجباري
 
 // ⚡ عزل بيانات كل طيار عن التاني على نفس الجهاز: كل بيانات الطيار (أرباح/سجل/طلبات...) بتتخزن
@@ -1084,6 +1103,7 @@ function trySyncPendingActions() {
 }
 
 var tabs = [
+    { id: 'map',       icon: 'fa-map-location-dot', label: 'الخريطة' },
     { id: 'new',       icon: 'fa-house',        label: 'الطلبات الجديدة' },
     { id: 'accepted',  icon: 'fa-circle-check',  label: 'مقبولة' },
     { id: 'preparing', icon: 'fa-utensils',      label: 'تحضير' },
@@ -1148,7 +1168,7 @@ function updateAllDelays() {
 
 function openDrawer() { document.getElementById('drawerOverlay').classList.add('open'); document.getElementById('drawerPanel').classList.add('open'); }
 function closeDrawer() { document.getElementById('drawerOverlay').classList.remove('open'); document.getElementById('drawerPanel').classList.remove('open'); }
-function openDrawerPage(pageId) { closeDrawer(); currentDrawerPage = pageId; document.querySelectorAll('.bnav-item').forEach(function(el) { el.classList.remove('on'); }); renderCurrentTab(false); }
+function openDrawerPage(pageId) { if (currentTab === 'map') { teardownRiderMap(); } closeDrawer(); currentDrawerPage = pageId; document.querySelectorAll('.bnav-item').forEach(function(el) { el.classList.remove('on'); }); renderCurrentTab(false); }
 
 function buildNav() {
     var nav = document.getElementById('bnav');
@@ -1160,7 +1180,7 @@ function buildNav() {
     }).join('');
 }
 
-function switchTab(id) { currentDrawerPage = null; currentTab = id; document.querySelectorAll('.bnav-item').forEach(function(el) { el.classList.toggle('on', el.dataset.tab === id); }); renderCurrentTab(true); }
+function switchTab(id) { if (currentTab === 'map' && id !== 'map') { teardownRiderMap(); } currentDrawerPage = null; currentTab = id; document.querySelectorAll('.bnav-item').forEach(function(el) { el.classList.toggle('on', el.dataset.tab === id); }); renderCurrentTab(true); }
 
 function getOrderPhase(order) { if (order.isDone) return 'done'; if (order.isDelivering) return 'delivering'; if (order.isPreparing) return 'preparing'; if (order.isAccepted) return 'accepted'; return 'new'; }
 function getOrdersFingerprint() { return allOrders.map(function(o) { return o.bon + ':' + (o.isAccepted?1:0) + (o.isPreparing?1:0) + (o.isDelivering?1:0) + (o.isDone?1:0); }).sort().join('|'); }
@@ -1189,6 +1209,7 @@ function renderCurrentTab(animate) {
     if (currentDrawerPage === 'inbox') { renderInbox(); return; }
     if (currentDrawerPage === 'support') { renderSupportChat(); return; }
     if (!serviceAvailable) { main.innerHTML = '<div class="svc-off"><div class="svc-off-card sys-pulse-danger"><div class="sys-icon danger"><i class="fa-solid fa-ban"></i></div><h2>الخدمة متوقفة مؤقتاً</h2><p>النظام غير متاح حالياً، حاول لاحقاً</p><div class="sys-statusbox"><span class="sys-dot"></span><span style="font-size:12px;color:var(--danger);font-weight:700;">جاري إعادة الفحص تلقائياً...</span></div></div></div>'; return; }
+    if (currentTab === 'map') { renderMapTab(animate); return; }
     if (currentTab === 'delivered') { renderDeliveredTab(animate); return; }
     var filtered = [];
     for (var i = 0; i < allOrders.length; i++) { if (getOrderPhase(allOrders[i]) === currentTab) filtered.push(allOrders[i]); }
@@ -1224,6 +1245,7 @@ function buildDeliveredCard(o) {
     html += '<div id="dtrows-' + o.bon + '" class="dlv-dt-rows"><div class="dlv-dt-grid cols-2 amber-grid"><div class="dlv-dt-cell"><span class="dlv-dt-lbl amber">طلب: اليوم</span><span class="dlv-dt-val amber">' + (o.orderDayDate || fmtDayStr(orderTS)) + '</span></div><div class="dlv-dt-cell"><span class="dlv-dt-lbl amber">طلب: الوقت</span><span class="dlv-dt-val amber" dir="ltr">' + (o.orderTime || '---') + '</span></div></div><div class="dlv-dt-grid cols-2 green-grid"><div class="dlv-dt-cell"><span class="dlv-dt-lbl green">تسليم: اليوم</span><span class="dlv-dt-val green">' + fmtDayStr(dclTS) + '</span></div><div class="dlv-dt-cell"><span class="dlv-dt-lbl green">تسليم: الوقت</span><span class="dlv-dt-val green" dir="ltr">' + fmtTimeStr(dclTS) + '</span></div></div></div>';
     html += '<div id="exprow-' + o.bon + '" style="display:none;height:0;"></div><div class="dlv-details" id="ddet-' + o.bon + '"><div class="dlv-details-inner">';
     var addrParts = []; if (o.ezba) addrParts.push('عزبة: ' + o.ezba); if (o.street) addrParts.push('شارع: ' + o.street); if (addrParts.length) { html += '<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:10px;margin-top:10px;"><i class="fa-solid fa-location-dot" style="color:var(--danger);font-size:13px;margin-top:2px;flex-shrink:0;width:16px;text-align:center;"></i><div style="font-size:12px;color:#D1D5DB;line-height:1.7;"><strong>' + escHtml(addrParts.join(' / ')) + '</strong>' + (o.landmark ? '<span style="color:var(--accent);font-weight:600;font-size:11px;display:block;margin-top:3px;">(علامة: ' + escHtml(o.landmark) + ')</span>' : '') + '</div></div>'; }
+    html += buildLocationButtonsHtml(o).replace('margin:0 16px 10px;', 'margin:0 0 10px;');
     if (o.orderDetails) { html += '<div style="margin-bottom:10px;"><span style="font-size:11px;color:var(--accent);font-weight:700;display:block;margin-bottom:4px;"><i class="fa-solid fa-list" style="margin-left:4px;"></i> محتويات الأوردر:</span><div class="oc-contents-box">' + escHtml(o.orderDetails) + '</div></div>'; }
     if (o.notes && o.notes !== 'لا توجد ملاحظات') { html += '<div class="oc-notes" style="margin-bottom:10px;"><i class="fa-solid fa-comment-dots"></i><span><b>ملحوظة:</b> ' + escHtml(o.notes) + '</span></div>'; }
     html += '<div class="oc-cost-box" style="margin:0 0 10px 0;"><div class="oc-cost-row"><span class="lbl"><i class="fa-solid fa-shopping-bag" style="color:var(--accent);"></i>ثمن الأوردر:</span><span class="val gold">' + oc + ' ج.م</span></div><div class="oc-cost-row"><span class="lbl"><i class="fa-solid fa-motorcycle" style="color:var(--info);"></i>التوصيل:</span><span class="val blue">' + dc + ' ج.م</span></div><div class="oc-cost-divider"></div><div class="oc-cost-row"><span class="lbl" style="font-size:14px;font-weight:900;"><i class="fa-solid fa-wallet" style="color:var(--accent);"></i>الإجمالي:</span><span class="val green">' + total + ' ج.م</span></div></div>';
@@ -1703,6 +1725,30 @@ function renderHistoryRangeDetail() {
 }
 
 
+// 🆕 استخراج الإحداثيات (lat,lng) من أي رابط جوجل ماب جاي من السيرفر (customerLocation / storeLocation)
+function parseLatLngFromLocationString(str) {
+    if (!str) return null;
+    str = str.toString().trim();
+    var m = str.match(/[?&]q=(-?\d+\.\d+),\s*(-?\d+\.\d+)/) ||
+            str.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/) ||
+            str.match(/[?&]query=(-?\d+\.\d+),\s*(-?\d+\.\d+)/) ||
+            str.match(/^(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)$/);
+    if (!m) return null;
+    var lat = parseFloat(m[1]); var lng = parseFloat(m[2]);
+    if (isNaN(lat) || isNaN(lng)) return null;
+    return { lat: lat, lng: lng };
+}
+
+// 🆕 زراير لوكيشن العميل/المحل - بتتحط جوه كارت الطلب لو الحقول موجودة جاية من السيرفر
+function buildLocationButtonsHtml(o) {
+    if (!o.customerLocation && !o.storeLocation) return '';
+    var html = '<div class="oc-loc-row">';
+    if (o.customerLocation) { html += '<a class="oc-loc-btn cust" href="' + escHtml(o.customerLocation) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()"><i class="fa-solid fa-location-crosshairs"></i> لوكيشن العميل</a>'; }
+    if (o.storeLocation) { html += '<a class="oc-loc-btn shop" href="' + escHtml(o.storeLocation) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()"><i class="fa-solid fa-store"></i> لوكيشن المحل</a>'; }
+    html += '</div>';
+    return html;
+}
+
 function buildOrderCard(o) {
     var phase = getOrderPhase(o); var isNew = !knownBons.has(o.bon); var arriveClass = isNew ? ' arrive' : ''; var badgeHTML = ''; var headerIcon = 'fa-shopping-bag';
     if (phase === 'new') { badgeHTML = '<span class="oc-badge badge-glow">طلب جديد</span>'; } else if (phase === 'accepted') { badgeHTML = '<span class="oc-badge badge-acc">تم القبول</span>'; headerIcon = 'fa-receipt'; } else if (phase === 'preparing') { badgeHTML = '<span class="oc-badge badge-prep">جاري التحضير</span>'; headerIcon = 'fa-receipt'; } else if (phase === 'delivering') { badgeHTML = '<span class="oc-badge badge-deli">جاري التوصيل</span>'; headerIcon = 'fa-receipt'; }
@@ -1713,10 +1759,12 @@ function buildOrderCard(o) {
     html += '</div>';
     if (phase === 'new') {
         html += '<div class="oc-time-grid"><div class="oc-time-item"><span class="oc-time-lbl">اليوم</span><span class="oc-time-val" style="direction:rtl;">' + (o.orderDayDate || '---') + '</span></div><div class="oc-time-item"><span class="oc-time-lbl">الساعة</span><span class="oc-time-val">' + (o.orderTime || '---') + '</span></div><div class="oc-time-item"><span class="oc-time-lbl">التأخير</span><span class="oc-time-val" data-delay-ts="' + orderTS + '" style="direction:rtl;color:' + delayResult.color + ';font-weight:900;">' + delayResult.text + '</span></div></div>';
+        html += buildLocationButtonsHtml(o);
         if (o.orderDetails) { html += '<div class="oc-details"><div class="oc-details-header" onclick="toggleDetails(' + o.bon + ')"><div class="oc-details-lbl"><i class="fa-solid fa-store"></i> <span class="oc-cat-name">' + escHtml(category || 'الطلب') + '</span></div><i class="fa-solid fa-chevron-down oc-details-arrow" id="arr-' + o.bon + '"></i></div><div class="oc-details-body" id="dtl-' + o.bon + '"><div class="oc-details-box">' + escHtml(o.orderDetails) + '</div></div></div>'; }
         if (o.notes && o.notes !== 'لا توجد ملاحظات') { html += '<div class="oc-notes"><i class="fa-solid fa-comment-dots"></i><span><b>ملحوظة:</b> ' + escHtml(o.notes) + '</span></div>'; }
         html += '<div class="oc-actions"><button class="act-btn pri" onclick="acceptOrderLocally(' + o.bon + ')"><i class="fa-solid fa-check-circle"></i> قبول الطلب</button></div>';
     } else {
+        html += buildLocationButtonsHtml(o);
         if (o.orderDetails) { html += '<div class="oc-contents"><span class="oc-contents-label"><i class="fa-solid fa-list"></i> محتويات الأوردر:</span><div class="oc-contents-box">' + escHtml(o.orderDetails) + '</div></div>'; }
         if (o.notes && o.notes !== 'لا توجد ملاحظات') { html += '<div class="oc-notes"><i class="fa-solid fa-comment-dots"></i><span><b>ملحوظة:</b> ' + escHtml(o.notes) + '</span></div>'; }
         var acceptTS = acceptedAtTimes[o.bon] || 0; var acceptDelayResult = acceptTS ? formatDelay(Date.now() - acceptTS) : { text: 'لم يبدأ', color: '#6B7280' }; var beforeAcceptDelay = (acceptTS && orderTS) ? formatDelay(acceptTS - orderTS) : { text: '---', color: 'var(--dim)' };
@@ -1735,6 +1783,129 @@ function buildOrderCard(o) {
     }
     html += '</div>'; return html;
 }
+
+// ============== 🆕 تبويب الخريطة ==============
+var riderMapInstance = null;
+var riderMapMarkersLayer = null;
+var riderLiveMarker = null;
+var riderGeoWatchId = null;
+var RIDER_ORDER_COLORS = ['#F59E0B', '#111827', '#00E676', '#38BDF8', '#A855F7', '#EF4444', '#EAB308', '#EC4899'];
+var RIDER_MAP_DEFAULT_CENTER = [30.0444, 31.2357];
+
+function isRunningInsideNativeApp() { return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); }
+
+async function ensureNativeLocationPermission() {
+    if (!isRunningInsideNativeApp()) return true;
+    try {
+        var geo = window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation;
+        if (!geo) return true;
+        var status = await geo.checkPermissions();
+        if (status.location !== 'granted') { status = await geo.requestPermissions(); }
+        return status.location === 'granted';
+    } catch (e) { return true; }
+}
+
+function getActiveOrdersForMap() {
+    var list = [];
+    for (var i = 0; i < allOrders.length; i++) { var phase = getOrderPhase(allOrders[i]); if (phase === 'accepted' || phase === 'preparing' || phase === 'delivering') list.push(allOrders[i]); }
+    return list;
+}
+
+function buildRiderPinIcon(color, iconClass) {
+    return L.divIcon({ className: '', html: '<div class="rdr-pin" style="background:' + color + ';"><i class="fa-solid ' + iconClass + '"></i></div>', iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -30] });
+}
+
+function renderMapTab(animate) {
+    var main = document.getElementById('mainContent');
+    // لو الخريطة شغالة أصلاً (مش أول مرة بتتفتح) منعملش إعادة تحميل كاملة - بس نحدّث الدبابيس
+    if (riderMapInstance && document.getElementById('riderMapEl')) { updateRiderMapMarkers(); return; }
+    var animClass = animate ? ' tab-anim' : '';
+    var html = '<div class="tab-pane on' + animClass + '" style="padding:0;height:100%;display:flex;flex-direction:column;">'
+        + '<div class="tab-head" style="padding:14px 16px;flex-shrink:0;"><h2><i class="fa-solid fa-map-location-dot" style="margin-left:6px;color:var(--accent);"></i>الخريطة</h2></div>'
+        + '<div id="riderMapLegend" style="padding:0 16px 8px;display:flex;flex-wrap:wrap;gap:8px;flex-shrink:0;"></div>'
+        + '<div style="flex:1;position:relative;min-height:340px;"><div id="riderMapEl" style="position:absolute;inset:0;"></div></div>'
+        + '</div>';
+    main.innerHTML = html;
+    initRiderMap();
+}
+
+function initRiderMap() {
+    if (typeof L === 'undefined') { document.getElementById('riderMapEl').innerHTML = '<div class="rdr-map-empty"><i class="fa-solid fa-triangle-exclamation"></i><br>تعذر تحميل الخريطة، تأكد من الاتصال بالإنترنت</div>'; return; }
+    riderMapInstance = L.map('riderMapEl', { zoomControl: true, attributionControl: false }).setView(RIDER_MAP_DEFAULT_CENTER, 12);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(riderMapInstance);
+    riderMapMarkersLayer = L.layerGroup().addTo(riderMapInstance);
+    updateRiderMapMarkers();
+    startRiderLiveTracking();
+}
+
+function updateRiderMapMarkers() {
+    if (!riderMapInstance || !riderMapMarkersLayer) return;
+    var keepLive = riderLiveMarker; // بنحافظ على دبوس الطيار الحي لما بنمسح الطبقة
+    riderMapMarkersLayer.clearLayers();
+    if (keepLive) { keepLive.addTo(riderMapMarkersLayer); }
+    var orders = getActiveOrdersForMap();
+    var boundsPoints = [];
+    var legendEl = document.getElementById('riderMapLegend');
+    var legendHtml = '';
+    var singleOrder = orders.length === 1;
+    for (var i = 0; i < orders.length; i++) {
+        var o = orders[i];
+        var color = singleOrder ? null : RIDER_ORDER_COLORS[i % RIDER_ORDER_COLORS.length];
+        var custColor = singleOrder ? '#00E676' : color;
+        var shopColor = singleOrder ? '#F59E0B' : color;
+        var custPos = parseLatLngFromLocationString(o.customerLocation);
+        var shopPos = parseLatLngFromLocationString(o.storeLocation);
+        if (custPos) {
+            var m1 = L.marker([custPos.lat, custPos.lng], { icon: buildRiderPinIcon(custColor, 'fa-user') }).addTo(riderMapMarkersLayer);
+            m1.bindPopup('<b>موقع العميل</b><br>بون: ' + o.bon + (o.name ? (' - ' + escHtml(o.name)) : ''));
+            boundsPoints.push([custPos.lat, custPos.lng]);
+        }
+        if (shopPos) {
+            var m2 = L.marker([shopPos.lat, shopPos.lng], { icon: buildRiderPinIcon(shopColor, 'fa-store') }).addTo(riderMapMarkersLayer);
+            m2.bindPopup('<b>موقع المحل</b><br>بون: ' + o.bon);
+            boundsPoints.push([shopPos.lat, shopPos.lng]);
+        }
+        if (custPos || shopPos) {
+            legendHtml += '<div class="rdr-map-legend-item"><span style="width:10px;height:10px;border-radius:50%;background:' + (singleOrder ? '#00E676' : color) + ';display:inline-block;"></span>بون ' + o.bon + '</div>';
+        }
+    }
+    if (legendEl) { legendEl.innerHTML = legendHtml; }
+    if (orders.length === 0) { if (legendEl) legendEl.innerHTML = '<div class="rdr-map-empty" style="padding:0;">مفيش طلبات شغالة دلوقتي عشان تتعرض على الخريطة</div>'; }
+    if (boundsPoints.length) {
+        if (riderLiveMarker) boundsPoints.push(riderLiveMarker.getLatLng());
+        try { riderMapInstance.fitBounds(boundsPoints, { padding: [40, 40], maxZoom: 16 }); } catch (e) {}
+    } else if (riderLiveMarker) {
+        riderMapInstance.setView(riderLiveMarker.getLatLng(), 15);
+    }
+}
+
+async function startRiderLiveTracking() {
+    if (!navigator.geolocation) return;
+    var ok = await ensureNativeLocationPermission();
+    if (!ok) return;
+    if (riderGeoWatchId !== null) return;
+    riderGeoWatchId = navigator.geolocation.watchPosition(function (pos) {
+        var lat = pos.coords.latitude, lng = pos.coords.longitude;
+        if (!riderMapInstance || !riderMapMarkersLayer) return;
+        if (!riderLiveMarker) {
+            riderLiveMarker = L.marker([lat, lng], { icon: L.divIcon({ className: '', html: '<div class="rdr-live-dot"></div>', iconSize: [20, 20], iconAnchor: [10, 10] }), zIndexOffset: 1000, interactive: false }).addTo(riderMapMarkersLayer);
+            riderMapInstance.setView([lat, lng], 14);
+        } else {
+            riderLiveMarker.setLatLng([lat, lng]);
+        }
+    }, function (err) { console.warn('rider geo watch error', err); }, { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 });
+}
+
+function stopRiderLiveTracking() {
+    if (riderGeoWatchId !== null && navigator.geolocation) { navigator.geolocation.clearWatch(riderGeoWatchId); riderGeoWatchId = null; }
+}
+
+function teardownRiderMap() {
+    stopRiderLiveTracking();
+    if (riderMapInstance) { try { riderMapInstance.remove(); } catch (e) {} riderMapInstance = null; }
+    riderMapMarkersLayer = null; riderLiveMarker = null;
+}
+// ============== نهاية تبويب الخريطة ==============
 
 function requestNotifPermission() { if ('Notification' in window && Notification.permission === 'default') { Notification.requestPermission(); } }
 document.addEventListener('click', requestNotifPermission, { once: true });

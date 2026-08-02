@@ -362,22 +362,27 @@
         .rdr-pin{width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(0,0,0,.5);border:2px solid #fff;}
         .rdr-pin i{transform:rotate(45deg);color:#fff;font-size:13px;}
         .rdr-live-dot{width:18px;height:18px;border-radius:50%;background:#4285F4;border:3px solid #fff;box-shadow:0 0 0 6px rgba(66,133,244,.28);}
-        .rdr-map-legend-item{display:flex;flex-direction:column;align-items:flex-start;gap:2px;font-size:11px;color:var(--muted);background:rgba(255,255,255,.04);padding:5px 10px;border-radius:9px;font-weight:700;cursor:pointer;border:1.5px solid transparent;transition:opacity .2s,border-color .2s;flex-shrink:0;}
-        .rdr-map-legend-item .rdr-legend-top{display:flex;align-items:center;gap:5px;}
-        .rdr-map-legend-item .rdr-dist{font-size:9px;color:var(--dim);font-weight:600;}
+        .rdr-map-legend-item{display:flex;flex-direction:column;align-items:flex-start;gap:2px;background:rgba(255,255,255,.04);padding:7px 12px;border-radius:10px;cursor:pointer;border:1.5px solid transparent;transition:opacity .2s,border-color .2s;flex-shrink:0;min-width:126px;}
+        .rdr-lg-bon{display:flex;align-items:center;font-size:12px;font-weight:900;color:#fff;}
+        .rdr-lg-name{font-size:10.5px;font-weight:700;color:#fff;}
+        .rdr-lg-shop{font-size:10px;font-weight:600;color:var(--muted);}
+        .rdr-lg-dist{font-size:9.5px;font-weight:700;color:var(--dim);}
         .rdr-map-legend-item.dim{opacity:.4;}
         .rdr-map-legend-item.active{border-color:var(--accent);background:rgba(0,230,118,.1);opacity:1;}
         .rdr-map-empty{padding:14px 16px;font-size:12px;color:var(--dim);text-align:center;}
-        .leaflet-tooltip.rdr-tooltip{background:rgba(17,24,39,.94);color:#fff;border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:4px 9px;font-family:'Cairo',sans-serif;text-align:center;box-shadow:0 3px 10px rgba(0,0,0,.45);line-height:1.3;transition:opacity .2s;}
-        .rdr-tt-bon{font-size:10.5px;font-weight:900;color:var(--accent);}
-        .rdr-tt-name{font-size:10px;font-weight:700;color:#fff;}
-        .rdr-tt-sub{font-size:9.5px;font-weight:600;color:var(--muted);}
-        .rdr-tooltip.rdr-tooltip-focus{padding:7px 13px;}
+        .leaflet-tooltip.rdr-tooltip{background:transparent;border:none;box-shadow:none;padding:0;transition:opacity .2s;}
+        .leaflet-tooltip.rdr-tooltip::before{display:none;}
+        .rdr-tt-card{background:#111827;color:#fff;border:1.5px solid rgba(255,255,255,.35);border-radius:9px;padding:4px 9px;font-family:'Cairo',sans-serif;text-align:center;box-shadow:0 3px 10px rgba(0,0,0,.45);line-height:1.3;text-shadow:0 1px 2px rgba(0,0,0,.55);min-width:76px;}
+        .rdr-tt-bon{font-size:10.5px;font-weight:900;}
+        .rdr-tt-name{font-size:10px;font-weight:700;}
+        .rdr-tt-sub{font-size:9.5px;font-weight:600;opacity:.92;}
+        .rdr-tt-dist{font-size:9.5px;font-weight:800;margin-top:1px;}
+        .rdr-tooltip.rdr-tooltip-focus .rdr-tt-card{padding:8px 14px;min-width:118px;}
         .rdr-tooltip.rdr-tooltip-focus .rdr-tt-bon{font-size:13px;}
         .rdr-tooltip.rdr-tooltip-focus .rdr-tt-name{font-size:11.5px;}
         .rdr-tooltip.rdr-tooltip-focus .rdr-tt-sub{font-size:11px;}
-        .rdr-popup{font-family:'Cairo',sans-serif;text-align:center;font-size:12px;}
-        .rdr-route-btn{margin-top:7px;background:var(--accent);color:#04140A;border:none;padding:8px 14px;border-radius:8px;font-size:11.5px;font-weight:800;display:flex;align-items:center;gap:5px;cursor:pointer;width:100%;justify-content:center;}
+        .rdr-tooltip.rdr-tooltip-focus .rdr-tt-dist{font-size:11px;}
+        .rdr-route-btn{margin-top:6px;background:#fff;color:#0B0F19;border:none;padding:7px 12px;border-radius:7px;font-size:11px;font-weight:800;display:flex;align-items:center;gap:5px;cursor:pointer;width:100%;justify-content:center;}
         .rdr-map-backbtn{position:absolute;bottom:16px;right:14px;z-index:1000;background:var(--card-up);color:#fff;border:1px solid rgba(255,255,255,.18);padding:10px 16px;border-radius:30px;font-size:12px;font-weight:800;align-items:center;gap:6px;box-shadow:0 4px 14px rgba(0,0,0,.45);}
         .rdr-route-info{display:none;position:absolute;top:10px;left:10px;right:10px;z-index:1000;background:var(--card-up);border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:10px 12px;font-size:11.5px;color:#fff;align-items:center;justify-content:space-between;gap:8px;box-shadow:0 4px 14px rgba(0,0,0,.4);}
         .bnav-badge{position:absolute;top:6px;right:22%;background:var(--danger);color:#fff;font-size:9px;font-weight:800;min-width:17px;height:17px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 4px;animation:popIn .3s ease;}
@@ -1806,10 +1811,12 @@ var riderMapMarkersLayer = null;
 var riderLiveMarker = null;
 var riderGeoWatchId = null;
 var riderRouteLayer = null;
-var riderMapMarkerRefs = {}; // { bon: { cust, shop, custPos, shopPos } }
+var riderMapMarkerRefs = {}; // { bon: { cust, shop, custPos, shopPos, color:{cust,shop}, custMeta, shopMeta, distShopCustText, distRiderShopText } }
 var riderMapFocusedBon = null;
+var riderMapActiveRouteMarker = null; // { bonKey, role } - الدبوس اللي اتدوس عليه مباشرة وعليه زرار الاتجاهات
 var RIDER_ORDER_COLORS = ['#F59E0B', '#111827', '#00E676', '#38BDF8', '#A855F7', '#EF4444', '#EAB308', '#EC4899'];
 var RIDER_MAP_DEFAULT_CENTER = [30.0444, 31.2357];
+var RIDER_TOOLTIP_DETAIL_ZOOM = 15; // من الزوم ده وفوق، الهنتات بتبقى كاملة التفاصيل. تحته بتبقى مختصرة عشان متتزحمش
 
 function isRunningInsideNativeApp() { return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); }
 
@@ -1847,11 +1854,51 @@ function haversineKm(lat1, lng1, lat2, lng2) {
 }
 
 function buildRiderPinIcon(color, iconClass) {
-    return L.divIcon({ className: '', html: '<div class="rdr-pin" style="background:' + color + ';"><i class="fa-solid ' + iconClass + '"></i></div>', iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -30] });
+    return L.divIcon({ className: '', html: '<div class="rdr-pin" style="background:' + color + ';"><i class="fa-solid ' + iconClass + '"></i></div>', iconSize: [32, 32], iconAnchor: [16, 32] });
 }
 
-function buildOrderTooltipHtml(bon, name, subLabel) {
-    return '<div class="rdr-tt-bon">بون ' + bon + '</div><div class="rdr-tt-name">' + escHtml(name || '') + '</div>' + (subLabel ? '<div class="rdr-tt-sub">' + escHtml(subLabel) + '</div>' : '');
+function isMapZoomDetailed() { return riderMapInstance && riderMapInstance.getZoom() >= RIDER_TOOLTIP_DETAIL_ZOOM; }
+
+function buildRouteBtnHtml(lat, lng, label) {
+    return '<button class="rdr-route-btn" onclick="event.stopPropagation();startRiderRoute(' + lat + ',' + lng + ',\'' + String(label).replace(/'/g, '') + '\')"><i class="fa-solid fa-diamond-turn-right"></i> اتجه نحو الموقع</button>';
+}
+
+// 🆕 بناء محتوى هنت الدبوس - بلون الدبوس نفسه، وبتفاصيل تتوسع لما تكون الهنت مركز عليها أو الزوم قريب كفاية
+function buildTooltipCardHtml(bonKey, role) {
+    var ref = riderMapMarkerRefs[bonKey];
+    if (!ref) return '';
+    var meta = role === 'shop' ? ref.shopMeta : ref.custMeta;
+    var color = role === 'shop' ? ref.color.shop : ref.color.cust;
+    var pos = role === 'shop' ? ref.shopPos : ref.custPos;
+    var isActiveRoute = riderMapActiveRouteMarker && riderMapActiveRouteMarker.bonKey === bonKey && riderMapActiveRouteMarker.role === role;
+    var detailed = isActiveRoute || isMapZoomDetailed() || riderMapFocusedBon === bonKey;
+    var html = '<div class="rdr-tt-card" style="background:' + color + ';border-color:' + color + ';">';
+    html += '<div class="rdr-tt-bon">بون ' + bonKey + '</div>';
+    if (detailed) {
+        html += '<div class="rdr-tt-name">' + escHtml(meta.name || '') + '</div>';
+        html += '<div class="rdr-tt-sub">' + escHtml(meta.sub || '') + '</div>';
+        var distText = role === 'shop' ? ref.distRiderShopText : ref.distShopCustText;
+        html += '<div class="rdr-tt-dist"><i class="fa-solid ' + (role === 'shop' ? 'fa-motorcycle' : 'fa-house') + '"></i> ' + (distText || '—') + '</div>';
+        if (isActiveRoute && pos) { html += buildRouteBtnHtml(pos.lat, pos.lng, (role === 'shop' ? 'موقع المحل' : 'موقع العميل') + ' - بون ' + bonKey); }
+    }
+    html += '</div>';
+    return html;
+}
+
+// 🆕 إعادة توليد محتوى كل الهنتات (بعد تغيير الزوم / التركيز / اختيار زر الاتجاهات)
+function refreshAllTooltipContents() {
+    for (var bonKey in riderMapMarkerRefs) {
+        var ref = riderMapMarkerRefs[bonKey];
+        if (ref.cust) { try { ref.cust.setTooltipContent(buildTooltipCardHtml(bonKey, 'cust')); } catch (e) {} }
+        if (ref.shop) { try { ref.shop.setTooltipContent(buildTooltipCardHtml(bonKey, 'shop')); } catch (e) {} }
+    }
+}
+
+function onOrderMarkerClick(bonKey, role) {
+    riderMapFocusedBon = bonKey;
+    riderMapActiveRouteMarker = { bonKey: bonKey, role: role };
+    applyMapFocusVisuals();
+    refreshAllTooltipContents();
 }
 
 function renderMapTab(animate) {
@@ -1878,6 +1925,8 @@ function initRiderMap() {
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(riderMapInstance);
     riderMapMarkersLayer = L.layerGroup().addTo(riderMapInstance);
     riderMapFocusedBon = null;
+    riderMapActiveRouteMarker = null;
+    riderMapInstance.on('zoomend', refreshAllTooltipContents);
     updateRiderMapMarkers();
     startRiderLiveTracking();
     setTimeout(function () { if (riderMapInstance) riderMapInstance.invalidateSize(); }, 150);
@@ -1903,29 +1952,38 @@ function updateRiderMapMarkers() {
         var custPos = parseLatLngFromLocationString(o.customerLocation);
         var shopPos = parseLatLngFromLocationString(o.storeLocation);
         var shopName = parseShopNameFromNotes(o.notes);
-        riderMapMarkerRefs[bonKey] = { cust: null, shop: null, custPos: custPos, shopPos: shopPos };
+        var shopCustKm = (custPos && shopPos) ? haversineKm(shopPos.lat, shopPos.lng, custPos.lat, custPos.lng).toFixed(1) + ' كم' : null;
+        var riderShopKm = (riderLiveMarker && shopPos) ? haversineKm(riderLiveMarker.getLatLng().lat, riderLiveMarker.getLatLng().lng, shopPos.lat, shopPos.lng).toFixed(1) + ' كم' : null;
+        riderMapMarkerRefs[bonKey] = {
+            cust: null, shop: null, custPos: custPos, shopPos: shopPos,
+            color: { cust: custColor, shop: shopColor },
+            custMeta: { name: o.name, sub: o.landmark || '—' },
+            shopMeta: { name: o.name, sub: shopName || 'المحل' },
+            distShopCustText: shopCustKm, distRiderShopText: riderShopKm
+        };
         if (custPos) {
             var m1 = L.marker([custPos.lat, custPos.lng], { icon: buildRiderPinIcon(custColor, 'fa-user') }).addTo(riderMapMarkersLayer);
-            m1.bindTooltip(buildOrderTooltipHtml(o.bon, o.name, o.landmark || '—'), { permanent: true, direction: 'top', offset: [0, -30], className: 'rdr-tooltip' });
-            m1.bindPopup('<div class="rdr-popup"><b>موقع العميل</b><br>بون: ' + o.bon + (o.name ? (' - ' + escHtml(o.name)) : '') + '<button class="rdr-route-btn" onclick="startRiderRoute(' + custPos.lat + ',' + custPos.lng + ',\'موقع العميل - بون ' + o.bon + '\')"><i class="fa-solid fa-diamond-turn-right"></i> اتجه نحو الموقع</button></div>');
-            m1.on('click', (function (bk) { return function () { toggleMapFocus(bk, true); }; })(bonKey));
+            m1.bindTooltip('', { permanent: true, direction: 'top', offset: [0, -30], className: 'rdr-tooltip' });
+            m1.setTooltipContent(buildTooltipCardHtml(bonKey, 'cust'));
+            m1.on('click', (function (bk) { return function () { onOrderMarkerClick(bk, 'cust'); }; })(bonKey));
             riderMapMarkerRefs[bonKey].cust = m1;
             boundsPoints.push([custPos.lat, custPos.lng]);
         }
         if (shopPos) {
             var m2 = L.marker([shopPos.lat, shopPos.lng], { icon: buildRiderPinIcon(shopColor, 'fa-store') }).addTo(riderMapMarkersLayer);
-            m2.bindTooltip(buildOrderTooltipHtml(o.bon, o.name, shopName || 'المحل'), { permanent: true, direction: 'top', offset: [0, -30], className: 'rdr-tooltip' });
-            m2.bindPopup('<div class="rdr-popup"><b>موقع المحل' + (shopName ? (' - ' + escHtml(shopName)) : '') + '</b><br>بون: ' + o.bon + '<button class="rdr-route-btn" onclick="startRiderRoute(' + shopPos.lat + ',' + shopPos.lng + ',\'موقع المحل - بون ' + o.bon + '\')"><i class="fa-solid fa-diamond-turn-right"></i> اتجه نحو الموقع</button></div>');
-            m2.on('click', (function (bk) { return function () { toggleMapFocus(bk, true); }; })(bonKey));
+            m2.bindTooltip('', { permanent: true, direction: 'top', offset: [0, -30], className: 'rdr-tooltip' });
+            m2.setTooltipContent(buildTooltipCardHtml(bonKey, 'shop'));
+            m2.on('click', (function (bk) { return function () { onOrderMarkerClick(bk, 'shop'); }; })(bonKey));
             riderMapMarkerRefs[bonKey].shop = m2;
             boundsPoints.push([shopPos.lat, shopPos.lng]);
         }
         if (custPos || shopPos) {
-            var shopCustKm = (custPos && shopPos) ? haversineKm(shopPos.lat, shopPos.lng, custPos.lat, custPos.lng).toFixed(1) : null;
-            var riderShopKm = (riderLiveMarker && shopPos) ? haversineKm(riderLiveMarker.getLatLng().lat, riderLiveMarker.getLatLng().lng, shopPos.lat, shopPos.lng).toFixed(1) : null;
-            legendHtml += '<div class="rdr-map-legend-item" id="legend-' + bonKey + '" data-bon="' + bonKey + '" onclick="toggleMapFocus(\'' + bonKey + '\')">'
-                + '<div class="rdr-legend-top"><span style="width:9px;height:9px;border-radius:50%;background:' + (singleOrder ? '#00E676' : color) + ';display:inline-block;"></span>بون ' + o.bon + '</div>'
-                + '<div class="rdr-dist"><i class="fa-solid fa-motorcycle"></i> <span id="dist-shop-' + bonKey + '">' + (riderShopKm ? riderShopKm + ' كم' : '—') + '</span> للمحل &nbsp; <i class="fa-solid fa-house"></i> ' + (shopCustKm ? shopCustKm + ' كم' : '—') + ' بعده للعميل</div>'
+            legendHtml += '<div class="rdr-map-legend-item" id="legend-' + bonKey + '" data-bon="' + bonKey + '" onclick="toggleMapFocus(\'' + bonKey + '\')" style="border-color:' + (singleOrder ? 'transparent' : color) + '22;">'
+                + '<div class="rdr-lg-bon"><span style="width:8px;height:8px;border-radius:50%;background:' + (singleOrder ? '#00E676' : color) + ';display:inline-block;margin-left:4px;"></span>بون ' + o.bon + '</div>'
+                + '<div class="rdr-lg-name">' + escHtml(o.name || '') + '</div>'
+                + '<div class="rdr-lg-shop">' + escHtml(shopName || 'المحل') + '</div>'
+                + '<div class="rdr-lg-dist"><i class="fa-solid fa-motorcycle"></i> <span id="dist-shop-' + bonKey + '">' + (riderShopKm || '—') + '</span> للمحل</div>'
+                + '<div class="rdr-lg-dist"><i class="fa-solid fa-house"></i> ' + (shopCustKm || '—') + ' للعميل بعده</div>'
                 + '</div>';
         }
     }
@@ -1944,27 +2002,33 @@ function updateRiderMapMarkers() {
 function updateRiderDistancesLive() {
     if (!riderLiveMarker) return;
     var pos = riderLiveMarker.getLatLng();
-    for (var bon in riderMapMarkerRefs) {
-        var ref = riderMapMarkerRefs[bon];
+    for (var bonKey in riderMapMarkerRefs) {
+        var ref = riderMapMarkerRefs[bonKey];
         if (ref.shopPos) {
-            var el = document.getElementById('dist-shop-' + bon);
-            if (el) el.textContent = haversineKm(pos.lat, pos.lng, ref.shopPos.lat, ref.shopPos.lng).toFixed(1) + ' كم';
+            ref.distRiderShopText = haversineKm(pos.lat, pos.lng, ref.shopPos.lat, ref.shopPos.lng).toFixed(1) + ' كم';
+            if (ref.shop) { try { ref.shop.setTooltipContent(buildTooltipCardHtml(bonKey, 'shop')); } catch (e) {} }
+            var chipEl = document.getElementById('dist-shop-' + bonKey);
+            if (chipEl) chipEl.textContent = ref.distRiderShopText;
         }
     }
 }
 
-// 🆕 وضع التركيز: يخلي طلب واحد واضح والباقي شبه شفاف، ولو من زرار الدبوس كمان يفتح خيار الاتجاهات
-function toggleMapFocus(bon, fromMarkerClick) {
+// 🆕 وضع التركيز: يخلي طلب واحد واضح والباقي شبه شفاف (من دوسة على شريط البون فوق، من غير ما يفتح زرار الاتجاهات)
+function toggleMapFocus(bon) {
     bon = String(bon);
-    if (riderMapFocusedBon === bon) { if (!fromMarkerClick) { clearMapFocus(); } return; }
+    if (riderMapFocusedBon === bon) { clearMapFocus(); return; }
     riderMapFocusedBon = bon;
+    riderMapActiveRouteMarker = null;
     applyMapFocusVisuals();
+    refreshAllTooltipContents();
 }
 
 function clearMapFocus() {
     riderMapFocusedBon = null;
+    riderMapActiveRouteMarker = null;
     clearRiderRoute();
     applyMapFocusVisuals();
+    refreshAllTooltipContents();
 }
 
 function applyMapFocusVisuals() {
@@ -2001,7 +2065,6 @@ async function startRiderRoute(destLat, destLng, label) {
         if (infoText) infoText.textContent = 'لسه مقدرش أحدد مكانك بدقة، استنى شوية وحاول تاني';
         return;
     }
-    if (riderMapInstance) { riderMapInstance.closePopup(); }
     var from = riderLiveMarker.getLatLng();
     if (infoEl) infoEl.style.display = 'flex';
     if (infoText) infoText.textContent = 'جارٍ حساب أسرع مسار...';
@@ -2052,8 +2115,8 @@ function stopRiderLiveTracking() {
 
 function teardownRiderMap() {
     stopRiderLiveTracking();
-    if (riderMapInstance) { try { riderMapInstance.remove(); } catch (e) {} riderMapInstance = null; }
-    riderMapMarkersLayer = null; riderLiveMarker = null; riderRouteLayer = null; riderMapMarkerRefs = {}; riderMapFocusedBon = null;
+    if (riderMapInstance) { try { riderMapInstance.off('zoomend', refreshAllTooltipContents); riderMapInstance.remove(); } catch (e) {} riderMapInstance = null; }
+    riderMapMarkersLayer = null; riderLiveMarker = null; riderRouteLayer = null; riderMapMarkerRefs = {}; riderMapFocusedBon = null; riderMapActiveRouteMarker = null;
 }
 // ============== نهاية تبويب الخريطة ==============
 

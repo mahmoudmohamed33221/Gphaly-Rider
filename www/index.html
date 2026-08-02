@@ -1838,9 +1838,10 @@ function getActiveOrdersForMap() {
 }
 
 // 🆕 استخراج اسم المحل من نص الملاحظات (لو موجود بالصيغة "المحل المطلوب: اسم")
-function parseShopNameFromNotes(notes) {
-    if (!notes) return '';
-    var m = notes.toString().match(/المحل المطلوب:\s*([^📍\n\r]+)/);
+// 🆕 استخراج اسم المحل اللي العميل كتبه فعليًا وقت الطلب (بيتبعت جوه تفاصيل الطلب، وأحيانًا جوه الملاحظات لو بيانات قديمة)
+function parseShopNameFromNotes(orderDetails, notes) {
+    var re = /المحل المطلوب:\s*([^📍\n\r]+)/;
+    var m = (orderDetails || '').toString().match(re) || (notes || '').toString().match(re);
     return m ? m[1].trim() : '';
 }
 
@@ -1951,7 +1952,7 @@ function updateRiderMapMarkers() {
         var shopColor = singleOrder ? '#F59E0B' : color;
         var custPos = parseLatLngFromLocationString(o.customerLocation);
         var shopPos = parseLatLngFromLocationString(o.storeLocation);
-        var shopName = parseShopNameFromNotes(o.notes);
+        var shopName = parseShopNameFromNotes(o.orderDetails, o.notes);
         var shopCustKm = (custPos && shopPos) ? haversineKm(shopPos.lat, shopPos.lng, custPos.lat, custPos.lng).toFixed(1) + ' كم' : null;
         var riderShopKm = (riderLiveMarker && shopPos) ? haversineKm(riderLiveMarker.getLatLng().lat, riderLiveMarker.getLatLng().lng, shopPos.lat, shopPos.lng).toFixed(1) + ' كم' : null;
         riderMapMarkerRefs[bonKey] = {
@@ -1963,7 +1964,7 @@ function updateRiderMapMarkers() {
         };
         if (custPos) {
             var m1 = L.marker([custPos.lat, custPos.lng], { icon: buildRiderPinIcon(custColor, 'fa-user') }).addTo(riderMapMarkersLayer);
-            m1.bindTooltip('', { permanent: true, direction: 'top', offset: [0, -26], className: 'rdr-tooltip' });
+            m1.bindTooltip('', { permanent: true, direction: 'top', offset: [0, -14], className: 'rdr-tooltip' });
             m1.setTooltipContent(buildTooltipCardHtml(bonKey, 'cust'));
             m1.on('click', (function (bk) { return function () { onOrderMarkerClick(bk, 'cust'); }; })(bonKey));
             riderMapMarkerRefs[bonKey].cust = m1;
@@ -1971,7 +1972,7 @@ function updateRiderMapMarkers() {
         }
         if (shopPos) {
             var m2 = L.marker([shopPos.lat, shopPos.lng], { icon: buildRiderPinIcon(shopColor, 'fa-store') }).addTo(riderMapMarkersLayer);
-            m2.bindTooltip('', { permanent: true, direction: 'top', offset: [0, -26], className: 'rdr-tooltip' });
+            m2.bindTooltip('', { permanent: true, direction: 'top', offset: [0, -14], className: 'rdr-tooltip' });
             m2.setTooltipContent(buildTooltipCardHtml(bonKey, 'shop'));
             m2.on('click', (function (bk) { return function () { onOrderMarkerClick(bk, 'shop'); }; })(bonKey));
             riderMapMarkerRefs[bonKey].shop = m2;

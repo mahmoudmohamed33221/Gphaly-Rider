@@ -2139,6 +2139,9 @@ async function fetchOsrmRoute(from, destLat, destLng, attempt) {
 }
 
 var riderRouteFullCoords = null; // النسخة الكاملة من نقط المسار (محفوظة عشان لو الطيار رجع للخلف نقدر نرجع نعرض الجزء اللي اتمسح)
+var riderLastMatchedIdx = null; // آخر نقطة اتأكدنا إنها مكانك على المسار - عشان نبحث حواليها بس مش في المسار كله
+var RIDER_MATCH_BACK_WINDOW = 8;
+var RIDER_MATCH_FWD_WINDOW = 40;
 var riderLastSnapTime = 0;
 var RIDER_SNAP_MIN_INTERVAL_MS = 3000; // تصحيح الموقع على الشارع كل 3 ثواني بحد أقصى، عشان نحترم حد الاستخدام العادل لسيرفر OSRM المجاني
 
@@ -2159,6 +2162,7 @@ async function startRiderRoute(destLat, destLng, label) {
         if (riderRouteLayer) { riderMapInstance.removeLayer(riderRouteLayer); }
         riderRouteLayer = L.polyline(coords, { color: '#00E676', weight: 6, opacity: 0.92, lineCap: 'round' }).addTo(riderMapInstance);
         riderRouteFullCoords = coords.slice();
+        riderLastMatchedIdx = null;
         riderLastSnapTime = 0; // نخلي أول نبضة GPS بعد رسم المسار تصحح مكانك على طول
         riderMapInstance.fitBounds(riderRouteLayer.getBounds(), { padding: [55, 55] });
         var km = (data.routes[0].distance / 1000).toFixed(1);
@@ -2173,6 +2177,7 @@ async function startRiderRoute(destLat, destLng, label) {
 function clearRiderRoute() {
     if (riderRouteLayer && riderMapInstance) { riderMapInstance.removeLayer(riderRouteLayer); riderRouteLayer = null; }
     riderRouteFullCoords = null;
+    riderLastMatchedIdx = null;
     var infoEl = document.getElementById('riderRouteInfo');
     if (infoEl) infoEl.style.display = 'none';
 }
@@ -2190,14 +2195,22 @@ function projectPointToSegment(px, py, ax, ay, bx, by) {
 // 🆕 بيلزق مكانك على أقرب نقطة من خط المسار المحمّل عندنا فعليًا - فوري ومن غير أي تأخير شبكة، وده اللي بيحل مشكلة "الملف" وتأخير المسح
 function snapToLoadedRoute(lat, lng) {
     if (!riderRouteFullCoords || riderRouteFullCoords.length < 2) return null;
-    var bestDist = Infinity, bestPoint = null, bestIdx = 0;
-    for (var i = 0; i < riderRouteFullCoords.length - 1; i++) {
+    var n = riderRouteFullCoords.length;
+    var startI = 0, endI = n - 2;
+    if (riderLastMatchedIdx !== null) {
+        // 🆕 نبحث بس في نطاق قريب من آخر مكان اتأكدنا منه - عشان منقفزش غلط لنقطة بعيدة قريبة بالصدفة
+        startI = Math.max(0, riderLastMatchedIdx - RIDER_MATCH_BACK_WINDOW);
+        endI = Math.min(n - 2, riderLastMatchedIdx + RIDER_MATCH_FWD_WINDOW);
+    }
+    var bestDist = Infinity, bestPoint = null, bestIdx = startI;
+    for (var i = startI; i <= endI; i++) {
         var a = riderRouteFullCoords[i], b = riderRouteFullCoords[i + 1];
         var proj = projectPointToSegment(lng, lat, a[1], a[0], b[1], b[0]);
         var d = haversineKm(lat, lng, proj.y, proj.x);
         if (d < bestDist) { bestDist = d; bestPoint = { lat: proj.y, lng: proj.x }; bestIdx = i; }
     }
     if (bestDist > 0.35) return null; // بعيد جدًا عن المسار (يمكن غيّر طريقه) - منلزقهوش غصب
+    riderLastMatchedIdx = bestIdx;
     return { lat: bestPoint.lat, lng: bestPoint.lng, idx: bestIdx };
 }
 
@@ -2321,7 +2334,7 @@ async function startRiderLiveTracking() {
         if (!riderMapInstance || !riderMapMarkersLayer) return;
 
         // لو الموبايل بيتحرك فعليًا وبيدينا اتجاه سير حقيقي من الـ GPS، نستخدمه للسهم (أدق من البوصلة وقت الحركة)
-        if (typeof pos.coords.heading === 'number' && !isNaN(pos.coords.heading) && pos.coords.speed && pos.coords.speed > 0.6) {
+        if (typeof pos.coords.heading === 'number' && !isNaN(pos.coords.heading) && pos.coords.speed && pos.coords.speed > 1.2) {
             setLiveMarkerHeading(pos.coords.heading);
         }
 
@@ -2348,7 +2361,7 @@ async function startRiderLiveTracking() {
                 updateRiderDistancesLive(target);
             });
         }
-    }, function (err) { console.warn('rider geo watch error', err); }, { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 });
+    }, function (err) { console.warn('rider geo watch error', err); }, { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 });
 }
 
 function stopRiderLiveTracking() {
@@ -2359,7 +2372,7 @@ function stopRiderLiveTracking() {
 function teardownRiderMap() {
     stopRiderLiveTracking();
     if (riderMapInstance) { try { riderMapInstance.off('zoomend', refreshAllTooltipContents); riderMapInstance.remove(); } catch (e) {} riderMapInstance = null; }
-    riderMapMarkersLayer = null; riderLiveMarker = null; riderRouteLayer = null; riderRouteFullCoords = null; riderMapMarkerRefs = {}; riderMapFocusedBon = null; riderMapActiveRouteMarker = null;
+    riderMapMarkersLayer = null; riderLiveMarker = null; riderRouteLayer = null; riderRouteFullCoords = null; riderLastMatchedIdx = null; riderMapMarkerRefs = {}; riderMapFocusedBon = null; riderMapActiveRouteMarker = null;
 }
 // ============== نهاية تبويب الخريطة ==============
 

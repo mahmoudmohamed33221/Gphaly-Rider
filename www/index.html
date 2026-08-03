@@ -1861,6 +1861,13 @@ function buildRiderPinIcon(color, iconClass) {
     return L.divIcon({ className: '', html: '<div class="rdr-pin" style="background:' + color + ';"><i class="fa-solid ' + iconClass + '"></i></div>', iconSize: [32, 32], iconAnchor: [16, 32] });
 }
 
+// 🆕 بنعيد ربط الهنت بالكامل (فك + إعادة ربط) بدل تحديث المحتوى بس، عشان مكانها فوق الدبوس يتحسب صح 100% في كل مرة
+function setMarkerTooltipHtml(marker, html) {
+    if (!marker) return;
+    try { marker.unbindTooltip(); } catch (e) {}
+    marker.bindTooltip(html, { permanent: true, direction: 'top', offset: [0, -14], className: 'rdr-tooltip' });
+}
+
 function isMapZoomDetailed() { return riderMapInstance && riderMapInstance.getZoom() >= RIDER_TOOLTIP_DETAIL_ZOOM; }
 
 function buildRouteBtnHtml(lat, lng, label) {
@@ -1893,8 +1900,8 @@ function buildTooltipCardHtml(bonKey, role) {
 function refreshAllTooltipContents() {
     for (var bonKey in riderMapMarkerRefs) {
         var ref = riderMapMarkerRefs[bonKey];
-        if (ref.cust) { try { ref.cust.setTooltipContent(buildTooltipCardHtml(bonKey, 'cust')); } catch (e) {} }
-        if (ref.shop) { try { ref.shop.setTooltipContent(buildTooltipCardHtml(bonKey, 'shop')); } catch (e) {} }
+        if (ref.cust) { setMarkerTooltipHtml(ref.cust, buildTooltipCardHtml(bonKey, 'cust')); }
+        if (ref.shop) { setMarkerTooltipHtml(ref.shop, buildTooltipCardHtml(bonKey, 'shop')); }
     }
 }
 
@@ -2008,7 +2015,7 @@ function updateRiderDistancesLive() {
         var ref = riderMapMarkerRefs[bonKey];
         if (ref.shopPos) {
             ref.distRiderShopText = haversineKm(pos.lat, pos.lng, ref.shopPos.lat, ref.shopPos.lng).toFixed(1) + ' كم';
-            if (ref.shop) { try { ref.shop.setTooltipContent(buildTooltipCardHtml(bonKey, 'shop')); } catch (e) {} }
+            if (ref.shop) { setMarkerTooltipHtml(ref.shop, buildTooltipCardHtml(bonKey, 'shop')); }
             var chipEl = document.getElementById('dist-shop-' + bonKey);
             if (chipEl) chipEl.textContent = ref.distRiderShopText;
         }

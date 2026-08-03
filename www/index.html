@@ -388,6 +388,13 @@
         .rdr-route-btn{pointer-events:auto;margin-top:6px;background:#fff;color:#0B0F19;border:none;padding:7px 12px;border-radius:7px;font-size:11px;font-weight:800;display:flex;align-items:center;gap:5px;cursor:pointer;width:100%;justify-content:center;}
         .rdr-map-backbtn{position:absolute;bottom:16px;right:14px;z-index:1000;background:var(--card-up);color:#fff;border:1px solid rgba(255,255,255,.18);padding:10px 16px;border-radius:30px;font-size:12px;font-weight:800;align-items:center;gap:6px;box-shadow:0 4px 14px rgba(0,0,0,.45);}
         .rdr-route-info{display:none;position:absolute;top:10px;left:10px;right:10px;z-index:1000;background:var(--card-up);border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:10px 12px;font-size:11.5px;color:#fff;align-items:center;justify-content:space-between;gap:8px;box-shadow:0 4px 14px rgba(0,0,0,.4);}
+        .rdr-route-choice-overlay{display:none;position:absolute;inset:0;background:rgba(0,0,0,.62);z-index:2000;align-items:center;justify-content:center;}
+        .rdr-route-choice-card{background:var(--card-up);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:20px 18px;width:82%;max-width:300px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5);}
+        .rdr-route-choice-title{font-size:14px;font-weight:900;color:#fff;margin-bottom:14px;}
+        .rdr-route-choice-btn{width:100%;padding:12px;border-radius:10px;font-size:12.5px;font-weight:800;margin-top:9px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;font-family:'Cairo',sans-serif;}
+        .rdr-route-choice-btn.primary{background:var(--accent);color:#04140A;}
+        .rdr-route-choice-btn.secondary{background:#fff;color:#0B0F19;}
+        .rdr-route-choice-btn.cancel{background:transparent;color:var(--dim);font-weight:700;margin-top:6px;}
         .bnav-badge{position:absolute;top:6px;right:22%;background:var(--danger);color:#fff;font-size:9px;font-weight:800;min-width:17px;height:17px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 4px;animation:popIn .3s ease;}
         @keyframes popIn{from{transform:scale(0)}to{transform:scale(1)}}
 
@@ -1871,7 +1878,45 @@ function setMarkerTooltipHtml(marker, html) {
 function isMapZoomDetailed() { return riderMapInstance && riderMapInstance.getZoom() >= RIDER_TOOLTIP_DETAIL_ZOOM; }
 
 function buildRouteBtnHtml(lat, lng, label) {
-    return '<button class="rdr-route-btn" onclick="event.stopPropagation();startRiderRoute(' + lat + ',' + lng + ',\'' + String(label).replace(/'/g, '') + '\')"><i class="fa-solid fa-diamond-turn-right"></i> اتجه نحو الموقع</button>';
+    return '<button class="rdr-route-btn" onclick="event.stopPropagation();openRouteChoice(' + lat + ',' + lng + ',\'' + String(label).replace(/'/g, '') + '\')"><i class="fa-solid fa-diamond-turn-right"></i> اتجه نحو الموقع</button>';
+}
+
+// 🆕 مودال اختيار: يكمل جوه التطبيق ولا يفتح جوجل ماب نفسه
+var riderPendingRouteTarget = null;
+
+function openRouteChoice(lat, lng, label) {
+    riderPendingRouteTarget = { lat: lat, lng: lng, label: label };
+    var modal = document.getElementById('riderRouteChoiceModal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeRouteChoiceModal() {
+    var modal = document.getElementById('riderRouteChoiceModal');
+    if (modal) modal.style.display = 'none';
+    riderPendingRouteTarget = null;
+}
+
+function confirmRouteChoice(mode) {
+    var t = riderPendingRouteTarget;
+    closeRouteChoiceModal();
+    if (!t) return;
+    if (mode === 'app') {
+        startRiderRoute(t.lat, t.lng, t.label);
+    } else if (mode === 'gmaps') {
+        openInGoogleMaps(t.lat, t.lng);
+    }
+}
+
+// 🆕 بيفتح تطبيق جوجل ماب نفسه على الموبايل (لو متثبت) محدد عليه اللوكيشن، والطيار يختار وسيلة المواصلة من جوجل ماب نفسه
+function openInGoogleMaps(lat, lng) {
+    var url = 'https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng;
+    try {
+        if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser && window.Capacitor.Plugins.Browser.open) {
+            window.Capacitor.Plugins.Browser.open({ url: url });
+            return;
+        }
+    } catch (e) {}
+    window.open(url, '_system');
 }
 
 // 🆕 بناء محتوى هنت الدبوس - بلون الدبوس نفسه، وبتفاصيل تتوسع لما تكون الهنت مركز عليها أو الزوم قريب كفاية
@@ -1924,6 +1969,14 @@ function renderMapTab(animate) {
         +   '<div id="riderMapEl" style="position:absolute;inset:0;"></div>'
         +   '<div id="riderRouteInfo" class="rdr-route-info"><span id="riderRouteInfoText"></span><button onclick="clearRiderRoute()" style="background:none;border:none;color:var(--danger);font-size:16px;padding:0 4px;"><i class="fa-solid fa-xmark"></i></button></div>'
         +   '<button id="riderMapBackBtn" class="rdr-map-backbtn" style="display:none;" onclick="clearMapFocus()"><i class="fa-solid fa-rotate-left"></i> رجوع للوضع الطبيعي</button>'
+        +   '<div id="riderRouteChoiceModal" class="rdr-route-choice-overlay" onclick="if(event.target===this)closeRouteChoiceModal()">'
+        +     '<div class="rdr-route-choice-card">'
+        +       '<div class="rdr-route-choice-title">هتتجه إزاي؟</div>'
+        +       '<button class="rdr-route-choice-btn primary" onclick="confirmRouteChoice(\'app\')"><i class="fa-solid fa-map-location-dot"></i> استمر في التطبيق</button>'
+        +       '<button class="rdr-route-choice-btn secondary" onclick="confirmRouteChoice(\'gmaps\')"><i class="fa-brands fa-google"></i> افتح جوجل ماب</button>'
+        +       '<button class="rdr-route-choice-btn cancel" onclick="closeRouteChoiceModal()">إلغاء</button>'
+        +     '</div>'
+        +   '</div>'
         + '</div>'
         + '</div>';
     main.innerHTML = html;
@@ -2008,9 +2061,9 @@ function updateRiderMapMarkers() {
 }
 
 // 🆕 تحديث خفيف لمسافة "الطيار للمحل" بس (بتتحرك مع كل نبضة GPS من غير إعادة رسم الدبابيس كلها)
-function updateRiderDistancesLive() {
-    if (!riderLiveMarker) return;
-    var pos = riderLiveMarker.getLatLng();
+function updateRiderDistancesLive(posOverride) {
+    if (!riderLiveMarker && !posOverride) return;
+    var pos = posOverride || riderLiveMarker.getLatLng();
     for (var bonKey in riderMapMarkerRefs) {
         var ref = riderMapMarkerRefs[bonKey];
         if (ref.shopPos) {
@@ -2066,6 +2119,28 @@ function applyMapFocusVisuals() {
 }
 
 // 🆕 رسم مسار (اتجاهات) من مكان الطيار الحالي لأي نقطة (عميل أو محل)
+async function fetchOsrmRoute(from, destLat, destLng, attempt) {
+    var url = 'https://router.project-osrm.org/route/v1/driving/' + from.lng + ',' + from.lat + ';' + destLng + ',' + destLat + '?overview=full&geometries=geojson';
+    var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var timeoutId = controller ? setTimeout(function () { controller.abort(); }, 9000) : null;
+    try {
+        var res = await fetch(url, controller ? { signal: controller.signal } : {});
+        if (timeoutId) clearTimeout(timeoutId);
+        if (!res.ok) throw new Error('http ' + res.status);
+        var data = await res.json();
+        if (!data.routes || !data.routes[0]) throw new Error('no route');
+        return data;
+    } catch (e) {
+        if (timeoutId) clearTimeout(timeoutId);
+        if (!attempt) { return fetchOsrmRoute(from, destLat, destLng, 1); } // محاولة تانية تلقائية قبل ما نستسلم
+        throw e;
+    }
+}
+
+var riderRouteFullCoords = null; // النسخة الكاملة من نقط المسار (محفوظة عشان لو الطيار رجع للخلف نقدر نرجع نعرض الجزء اللي اتمسح)
+var riderLastSnapTime = 0;
+var RIDER_SNAP_MIN_INTERVAL_MS = 3000; // تصحيح الموقع على الشارع كل 3 ثواني بحد أقصى، عشان نحترم حد الاستخدام العادل لسيرفر OSRM المجاني
+
 async function startRiderRoute(destLat, destLng, label) {
     var infoEl = document.getElementById('riderRouteInfo');
     var infoText = document.getElementById('riderRouteInfoText');
@@ -2078,26 +2153,84 @@ async function startRiderRoute(destLat, destLng, label) {
     if (infoEl) infoEl.style.display = 'flex';
     if (infoText) infoText.textContent = 'جارٍ حساب أسرع مسار...';
     try {
-        var url = 'https://router.project-osrm.org/route/v1/driving/' + from.lng + ',' + from.lat + ';' + destLng + ',' + destLat + '?overview=full&geometries=geojson';
-        var res = await fetch(url);
-        var data = await res.json();
-        if (!data.routes || !data.routes[0]) throw new Error('no route');
+        var data = await fetchOsrmRoute(from, destLat, destLng, 0);
         var coords = data.routes[0].geometry.coordinates.map(function (c) { return [c[1], c[0]]; });
         if (riderRouteLayer) { riderMapInstance.removeLayer(riderRouteLayer); }
         riderRouteLayer = L.polyline(coords, { color: '#00E676', weight: 6, opacity: 0.92, lineCap: 'round' }).addTo(riderMapInstance);
+        riderRouteFullCoords = coords.slice();
+        riderLastSnapTime = 0; // نخلي أول نبضة GPS بعد رسم المسار تصحح مكانك على طول
         riderMapInstance.fitBounds(riderRouteLayer.getBounds(), { padding: [55, 55] });
         var km = (data.routes[0].distance / 1000).toFixed(1);
         var mins = Math.round(data.routes[0].duration / 60);
         if (infoText) infoText.innerHTML = '<i class="fa-solid fa-route" style="margin-left:5px;"></i>' + escHtml(label) + ' — ' + km + ' كم — تقريبًا ' + mins + ' دقيقة';
     } catch (e) {
-        if (infoText) infoText.textContent = 'تعذر حساب المسار دلوقتي، جرب تاني';
+        var gmapsUrl = 'https://www.google.com/maps/dir/?api=1&origin=' + from.lat + ',' + from.lng + '&destination=' + destLat + ',' + destLng + '&travelmode=driving';
+        if (infoText) infoText.innerHTML = 'تعذر حساب المسار دلوقتي، جرب تاني — أو <a href="' + gmapsUrl + '" target="_blank" style="color:var(--accent);font-weight:800;text-decoration:underline;pointer-events:auto;">افتح في جوجل ماب</a>';
     }
 }
 
 function clearRiderRoute() {
     if (riderRouteLayer && riderMapInstance) { riderMapInstance.removeLayer(riderRouteLayer); riderRouteLayer = null; }
+    riderRouteFullCoords = null;
     var infoEl = document.getElementById('riderRouteInfo');
     if (infoEl) infoEl.style.display = 'none';
+}
+
+// 🆕 بيمسح الجزء اللي الطيار عداه فعليًا من خط المسار، ويسيب بس الجزء اللي لسه قدامه (ولو رجع للخلف، الجزء بيرجع يظهر تاني)
+function trimRouteProgress(lat, lng) {
+    if (!riderRouteFullCoords || !riderRouteLayer || riderRouteFullCoords.length < 2) return;
+    var bestIdx = 0, bestDist = Infinity;
+    for (var i = 0; i < riderRouteFullCoords.length; i++) {
+        var d = haversineKm(lat, lng, riderRouteFullCoords[i][0], riderRouteFullCoords[i][1]);
+        if (d < bestDist) { bestDist = d; bestIdx = i; }
+    }
+    if (bestDist > 0.35) return; // لو الطيار بعيد جدًا عن خط المسار (يمكن غيّر طريقه) منمسحش حاجة عشان منلخبطش
+    var remaining = riderRouteFullCoords.slice(bestIdx);
+    if (remaining.length > 1) { riderRouteLayer.setLatLngs(remaining); }
+}
+
+// 🆕 بيرسم/يحدّث نقطة الطيار الحية على الخريطة
+function placeOrUpdateLiveMarker(lat, lng) {
+    if (!riderMapInstance || !riderMapMarkersLayer) return;
+    if (!riderLiveMarker) {
+        riderLiveMarker = L.marker([lat, lng], { icon: L.divIcon({ className: '', html: '<div class="rdr-live-dot"></div>', iconSize: [20, 20], iconAnchor: [10, 10] }), zIndexOffset: 1500, interactive: false }).addTo(riderMapMarkersLayer);
+        riderMapInstance.setView([lat, lng], 14);
+    } else {
+        riderLiveMarker.setLatLng([lat, lng]);
+    }
+}
+
+// 🆕 بيبعت إحداثية الـ GPS الخام لسيرفر الخرائط ويرجعله أقرب نقطة على الشارع نفسه (تصحيح "ماشي جنب الشارع")
+async function snapToRoad(lat, lng) {
+    try {
+        var url = 'https://router.project-osrm.org/nearest/v1/driving/' + lng + ',' + lat;
+        var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        var timeoutId = controller ? setTimeout(function () { controller.abort(); }, 5000) : null;
+        var res = await fetch(url, controller ? { signal: controller.signal } : {});
+        if (timeoutId) clearTimeout(timeoutId);
+        var data = await res.json();
+        if (data && data.waypoints && data.waypoints[0]) {
+            var loc = data.waypoints[0].location; // [lng, lat]
+            return { lat: loc[1], lng: loc[0] };
+        }
+    } catch (e) {}
+    return null;
+}
+
+// 🆕 بيحرك الدبوس بسلاسة من مكانه الحالي للمكان الجديد المصحح، بدل ما يقفز فجأة
+function animateLiveMarkerTo(lat, lng, duration) {
+    if (!riderLiveMarker) { placeOrUpdateLiveMarker(lat, lng); return; }
+    var start = riderLiveMarker.getLatLng();
+    var startTime = null;
+    duration = duration || 900;
+    function step(ts) {
+        if (!riderLiveMarker) return;
+        if (!startTime) startTime = ts;
+        var progress = Math.min((ts - startTime) / duration, 1);
+        riderLiveMarker.setLatLng([start.lat + (lat - start.lat) * progress, start.lng + (lng - start.lng) * progress]);
+        if (progress < 1) { requestAnimationFrame(step); }
+    }
+    requestAnimationFrame(step);
 }
 
 async function startRiderLiveTracking() {
@@ -2109,12 +2242,20 @@ async function startRiderLiveTracking() {
         var lat = pos.coords.latitude, lng = pos.coords.longitude;
         if (!riderMapInstance || !riderMapMarkersLayer) return;
         if (!riderLiveMarker) {
-            riderLiveMarker = L.marker([lat, lng], { icon: L.divIcon({ className: '', html: '<div class="rdr-live-dot"></div>', iconSize: [20, 20], iconAnchor: [10, 10] }), zIndexOffset: 1500, interactive: false }).addTo(riderMapMarkersLayer);
-            riderMapInstance.setView([lat, lng], 14);
-        } else {
-            riderLiveMarker.setLatLng([lat, lng]);
+            // أول ظهور بس بيبقى بالمكان الخام، لحد ما يوصل أول تصحيح على الشارع
+            placeOrUpdateLiveMarker(lat, lng);
+            updateRiderDistancesLive();
         }
-        updateRiderDistancesLive();
+        var now = Date.now();
+        if (now - riderLastSnapTime >= RIDER_SNAP_MIN_INTERVAL_MS) {
+            riderLastSnapTime = now;
+            snapToRoad(lat, lng).then(function (snapped) {
+                var target = snapped || { lat: lat, lng: lng }; // لو التصحيح فشل مؤقتًا، نستخدم المكان الخام كحل بديل بدل ما نقف
+                animateLiveMarkerTo(target.lat, target.lng, 900);
+                updateRiderDistancesLive(target);
+                if (riderRouteLayer) { trimRouteProgress(target.lat, target.lng); }
+            });
+        }
     }, function (err) { console.warn('rider geo watch error', err); }, { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 });
 }
 
@@ -2125,7 +2266,7 @@ function stopRiderLiveTracking() {
 function teardownRiderMap() {
     stopRiderLiveTracking();
     if (riderMapInstance) { try { riderMapInstance.off('zoomend', refreshAllTooltipContents); riderMapInstance.remove(); } catch (e) {} riderMapInstance = null; }
-    riderMapMarkersLayer = null; riderLiveMarker = null; riderRouteLayer = null; riderMapMarkerRefs = {}; riderMapFocusedBon = null; riderMapActiveRouteMarker = null;
+    riderMapMarkersLayer = null; riderLiveMarker = null; riderRouteLayer = null; riderRouteFullCoords = null; riderMapMarkerRefs = {}; riderMapFocusedBon = null; riderMapActiveRouteMarker = null;
 }
 // ============== نهاية تبويب الخريطة ==============
 

@@ -2286,11 +2286,17 @@ var riderHeadingListenerAdded = false;
 
 function setLiveMarkerHeading(deg) {
     if (typeof deg !== 'number' || isNaN(deg)) return;
-    riderCurrentHeading = deg;
+    // 🆕 بنحسب أقرب تمثيل رقمي للزاوية الجديدة قريب من القيمة الحالية، عشان يلف بأقصر مسافة دايمًا مش لفة كاملة زيادة
+    var normalizedTarget = ((deg % 360) + 360) % 360;
+    var normalizedCurrent = ((riderCurrentHeading % 360) + 360) % 360;
+    var diff = normalizedTarget - normalizedCurrent;
+    if (diff > 180) diff -= 360;
+    if (diff < -180) diff += 360;
+    riderCurrentHeading = riderCurrentHeading + diff;
     if (riderLiveMarker) {
         var el = riderLiveMarker.getElement();
         var puck = el ? el.querySelector('.rdr-live-puck') : null;
-        if (puck) { puck.style.setProperty('--heading', deg + 'deg'); }
+        if (puck) { puck.style.setProperty('--heading', riderCurrentHeading + 'deg'); }
     }
 }
 

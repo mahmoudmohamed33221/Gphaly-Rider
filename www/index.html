@@ -361,7 +361,9 @@
         #riderMapEl{background:#1a1a1a;}
         .rdr-pin{width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(0,0,0,.5);border:2px solid #fff;}
         .rdr-pin i{transform:rotate(45deg);color:#fff;font-size:13px;}
-        .rdr-live-dot{width:18px;height:18px;border-radius:50%;background:#4285F4;border:3px solid #fff;box-shadow:0 0 0 6px rgba(66,133,244,.28);}
+        .rdr-live-puck{width:26px;height:26px;position:relative;transform:rotate(var(--heading,0deg));transition:transform .25s ease;}
+        .rdr-live-puck::before{content:'';position:absolute;left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;background:#4285F4;border:3px solid #fff;box-shadow:0 0 0 6px rgba(66,133,244,.25);}
+        .rdr-live-puck::after{content:'';position:absolute;left:50%;top:-2px;margin-left:-6px;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:11px solid #4285F4;filter:drop-shadow(0 1px 1px rgba(0,0,0,.4));}
         .rdr-map-legend-item{display:flex;flex-direction:column;align-items:flex-start;gap:2px;background:rgba(255,255,255,.04);padding:7px 12px;border-radius:10px;cursor:pointer;border:1.5px solid transparent;transition:opacity .2s,border-color .2s;flex-shrink:0;min-width:126px;}
         .rdr-lg-bon{display:flex;align-items:center;font-size:12px;font-weight:900;color:#fff;}
         .rdr-lg-name{font-size:10.5px;font-weight:700;color:#fff;}
@@ -2176,7 +2178,38 @@ function clearRiderRoute() {
     if (infoEl) infoEl.style.display = 'none';
 }
 
-// 🆕 بيمسح الجزء اللي الطيار عداه فعليًا من خط المسار، ويسيب بس الجزء اللي لسه قدامه (ولو رجع للخلف، الجزء بيرجع يظهر تاني)
+// 🆕 أقرب نقطة على قطعة خط من A لـ B لنقطة معينة (إسقاط عمودي - حساب محلي فوري من غير أي اتصال بالإنترنت)
+function projectPointToSegment(px, py, ax, ay, bx, by) {
+    var abx = bx - ax, aby = by - ay;
+    var apx = px - ax, apy = py - ay;
+    var abLenSq = abx * abx + aby * aby;
+    var t = abLenSq > 0 ? (apx * abx + apy * aby) / abLenSq : 0;
+    t = Math.max(0, Math.min(1, t));
+    return { x: ax + abx * t, y: ay + aby * t };
+}
+
+// 🆕 بيلزق مكانك على أقرب نقطة من خط المسار المحمّل عندنا فعليًا - فوري ومن غير أي تأخير شبكة، وده اللي بيحل مشكلة "الملف" وتأخير المسح
+function snapToLoadedRoute(lat, lng) {
+    if (!riderRouteFullCoords || riderRouteFullCoords.length < 2) return null;
+    var bestDist = Infinity, bestPoint = null, bestIdx = 0;
+    for (var i = 0; i < riderRouteFullCoords.length - 1; i++) {
+        var a = riderRouteFullCoords[i], b = riderRouteFullCoords[i + 1];
+        var proj = projectPointToSegment(lng, lat, a[1], a[0], b[1], b[0]);
+        var d = haversineKm(lat, lng, proj.y, proj.x);
+        if (d < bestDist) { bestDist = d; bestPoint = { lat: proj.y, lng: proj.x }; bestIdx = i; }
+    }
+    if (bestDist > 0.35) return null; // بعيد جدًا عن المسار (يمكن غيّر طريقه) - منلزقهوش غصب
+    return { lat: bestPoint.lat, lng: bestPoint.lng, idx: bestIdx };
+}
+
+// 🆕 بيمسح الجزء اللي الطيار عداه فعليًا من خط المسار فورًا، ويسيب بس الجزء اللي لسه قدامه (ولو رجع للخلف، الجزء بيرجع يظهر تاني)
+function trimRouteProgressAt(snapResult) {
+    if (!riderRouteFullCoords || !riderRouteLayer || !snapResult) return;
+    var remaining = [[snapResult.lat, snapResult.lng]].concat(riderRouteFullCoords.slice(snapResult.idx + 1));
+    if (remaining.length > 1) { riderRouteLayer.setLatLngs(remaining); }
+}
+
+// نسخة بتدور على أقرب نقطة (بدون فهرس جاهز) - بتتستخدم بس لما مفيش مسار محلي وبنعتمد على تصحيح السيرفر
 function trimRouteProgress(lat, lng) {
     if (!riderRouteFullCoords || !riderRouteLayer || riderRouteFullCoords.length < 2) return;
     var bestIdx = 0, bestDist = Infinity;
@@ -2184,23 +2217,23 @@ function trimRouteProgress(lat, lng) {
         var d = haversineKm(lat, lng, riderRouteFullCoords[i][0], riderRouteFullCoords[i][1]);
         if (d < bestDist) { bestDist = d; bestIdx = i; }
     }
-    if (bestDist > 0.35) return; // لو الطيار بعيد جدًا عن خط المسار (يمكن غيّر طريقه) منمسحش حاجة عشان منلخبطش
+    if (bestDist > 0.35) return;
     var remaining = riderRouteFullCoords.slice(bestIdx);
     if (remaining.length > 1) { riderRouteLayer.setLatLngs(remaining); }
 }
 
-// 🆕 بيرسم/يحدّث نقطة الطيار الحية على الخريطة
+// 🆕 بيرسم/يحدّث نقطة الطيار الحية على الخريطة (سهم بيدور مع اتجاهك)
 function placeOrUpdateLiveMarker(lat, lng) {
     if (!riderMapInstance || !riderMapMarkersLayer) return;
     if (!riderLiveMarker) {
-        riderLiveMarker = L.marker([lat, lng], { icon: L.divIcon({ className: '', html: '<div class="rdr-live-dot"></div>', iconSize: [20, 20], iconAnchor: [10, 10] }), zIndexOffset: 1500, interactive: false }).addTo(riderMapMarkersLayer);
+        riderLiveMarker = L.marker([lat, lng], { icon: L.divIcon({ className: '', html: '<div class="rdr-live-puck" style="--heading:' + riderCurrentHeading + 'deg;"></div>', iconSize: [28, 28], iconAnchor: [14, 14] }), zIndexOffset: 1500, interactive: false }).addTo(riderMapMarkersLayer);
         riderMapInstance.setView([lat, lng], 14);
     } else {
         riderLiveMarker.setLatLng([lat, lng]);
     }
 }
 
-// 🆕 بيبعت إحداثية الـ GPS الخام لسيرفر الخرائط ويرجعله أقرب نقطة على الشارع نفسه (تصحيح "ماشي جنب الشارع")
+// 🆕 بيبعت إحداثية الـ GPS الخام لسيرفر الخرائط ويرجعله أقرب نقطة على الشارع نفسه (بيتستخدم بس لما مفيش مسار محمّل عندنا)
 async function snapToRoad(lat, lng) {
     try {
         var url = 'https://router.project-osrm.org/nearest/v1/driving/' + lng + ',' + lat;
@@ -2217,14 +2250,16 @@ async function snapToRoad(lat, lng) {
     return null;
 }
 
-// 🆕 بيحرك الدبوس بسلاسة من مكانه الحالي للمكان الجديد المصحح، بدل ما يقفز فجأة
+// 🆕 بيحرك الدبوس بسلاسة من مكانه الحالي للمكان الجديد، وبيلغي أي حركة قديمة لسه شغالة عشان الحركات ميتلخبطوش فوق بعض
+var riderMarkerAnimToken = 0;
 function animateLiveMarkerTo(lat, lng, duration) {
     if (!riderLiveMarker) { placeOrUpdateLiveMarker(lat, lng); return; }
+    var myToken = ++riderMarkerAnimToken;
     var start = riderLiveMarker.getLatLng();
     var startTime = null;
     duration = duration || 900;
     function step(ts) {
-        if (!riderLiveMarker) return;
+        if (myToken !== riderMarkerAnimToken || !riderLiveMarker) return;
         if (!startTime) startTime = ts;
         var progress = Math.min((ts - startTime) / duration, 1);
         riderLiveMarker.setLatLng([start.lat + (lat - start.lat) * progress, start.lng + (lng - start.lng) * progress]);
@@ -2233,34 +2268,93 @@ function animateLiveMarkerTo(lat, lng, duration) {
     requestAnimationFrame(step);
 }
 
+// 🆕 البوصلة: بتدوّر السهم حسب اتجاهك حتى وانت واقف مكانك
+var riderCurrentHeading = 0;
+var riderHeadingListenerAdded = false;
+
+function setLiveMarkerHeading(deg) {
+    if (typeof deg !== 'number' || isNaN(deg)) return;
+    riderCurrentHeading = deg;
+    if (riderLiveMarker) {
+        var el = riderLiveMarker.getElement();
+        var puck = el ? el.querySelector('.rdr-live-puck') : null;
+        if (puck) { puck.style.setProperty('--heading', deg + 'deg'); }
+    }
+}
+
+function handleDeviceOrientationForHeading(e) {
+    var heading = null;
+    if (typeof e.webkitCompassHeading === 'number') { heading = e.webkitCompassHeading; } // iOS
+    else if (typeof e.alpha === 'number') { heading = 360 - e.alpha; } // أندرويد
+    if (heading !== null) { setLiveMarkerHeading(heading); }
+}
+
+function startCompassTracking() {
+    if (riderHeadingListenerAdded || typeof window.DeviceOrientationEvent === 'undefined') return;
+    riderHeadingListenerAdded = true;
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission().then(function (state) {
+            if (state === 'granted') {
+                window.addEventListener('deviceorientationabsolute', handleDeviceOrientationForHeading, true);
+                window.addEventListener('deviceorientation', handleDeviceOrientationForHeading, true);
+            }
+        }).catch(function () {});
+    } else {
+        window.addEventListener('deviceorientationabsolute', handleDeviceOrientationForHeading, true);
+        window.addEventListener('deviceorientation', handleDeviceOrientationForHeading, true);
+    }
+}
+
+function stopCompassTracking() {
+    riderHeadingListenerAdded = false;
+    window.removeEventListener('deviceorientationabsolute', handleDeviceOrientationForHeading, true);
+    window.removeEventListener('deviceorientation', handleDeviceOrientationForHeading, true);
+}
+
 async function startRiderLiveTracking() {
     if (!navigator.geolocation) return;
     var ok = await ensureNativeLocationPermission();
     if (!ok) return;
+    startCompassTracking();
     if (riderGeoWatchId !== null) return;
     riderGeoWatchId = navigator.geolocation.watchPosition(function (pos) {
         var lat = pos.coords.latitude, lng = pos.coords.longitude;
         if (!riderMapInstance || !riderMapMarkersLayer) return;
-        if (!riderLiveMarker) {
-            // أول ظهور بس بيبقى بالمكان الخام، لحد ما يوصل أول تصحيح على الشارع
-            placeOrUpdateLiveMarker(lat, lng);
-            updateRiderDistancesLive();
+
+        // لو الموبايل بيتحرك فعليًا وبيدينا اتجاه سير حقيقي من الـ GPS، نستخدمه للسهم (أدق من البوصلة وقت الحركة)
+        if (typeof pos.coords.heading === 'number' && !isNaN(pos.coords.heading) && pos.coords.speed && pos.coords.speed > 0.6) {
+            setLiveMarkerHeading(pos.coords.heading);
         }
+
+        if (!riderLiveMarker) { placeOrUpdateLiveMarker(lat, lng); updateRiderDistancesLive(); }
+
+        // 🆕 لو عندنا مسار محمّل، نلزق مكانك عليه فورًا (حساب محلي، بدون أي تأخير شبكة) - ده اللي بيحل مشكلة الملف وتأخير المسح
+        if (riderRouteFullCoords) {
+            var localSnap = snapToLoadedRoute(lat, lng);
+            if (localSnap) {
+                animateLiveMarkerTo(localSnap.lat, localSnap.lng, 350);
+                updateRiderDistancesLive(localSnap);
+                trimRouteProgressAt(localSnap);
+                return;
+            }
+        }
+
+        // لو مفيش مسار محمّل، نرجع لتصحيح السيرفر العادي كل كام ثانية
         var now = Date.now();
         if (now - riderLastSnapTime >= RIDER_SNAP_MIN_INTERVAL_MS) {
             riderLastSnapTime = now;
             snapToRoad(lat, lng).then(function (snapped) {
-                var target = snapped || { lat: lat, lng: lng }; // لو التصحيح فشل مؤقتًا، نستخدم المكان الخام كحل بديل بدل ما نقف
+                var target = snapped || { lat: lat, lng: lng };
                 animateLiveMarkerTo(target.lat, target.lng, 900);
                 updateRiderDistancesLive(target);
-                if (riderRouteLayer) { trimRouteProgress(target.lat, target.lng); }
             });
         }
-    }, function (err) { console.warn('rider geo watch error', err); }, { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 });
+    }, function (err) { console.warn('rider geo watch error', err); }, { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 });
 }
 
 function stopRiderLiveTracking() {
     if (riderGeoWatchId !== null && navigator.geolocation) { navigator.geolocation.clearWatch(riderGeoWatchId); riderGeoWatchId = null; }
+    stopCompassTracking();
 }
 
 function teardownRiderMap() {

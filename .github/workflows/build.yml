@@ -51,6 +51,32 @@ jobs:
           echo "----- AndroidManifest.xml بعد التعديل -----"
           cat "$MANIFEST"
 
+      # 🆕 حل أضمن للمفتاح الثابت: بدل ما نعتمد على مكان افتراضي (~/.android/debug.keystore)
+      # اللي مش متأكدين إنه بيتاخد في الاعتبار دايمًا، بنخلي ملف بناء المشروع نفسه (build.gradle)
+      # يستخدم المفتاح الثابت صراحة. كده مضمون 100% إن كل نسخة هتتوقع بنفس الشهادة.
+      - name: Force fixed signing config in build.gradle
+        run: |
+          cat >> android/app/build.gradle << 'EOF'
+
+          android {
+              signingConfigs {
+                  debug {
+                      storeFile file('../../debug.keystore')
+                      storePassword 'android'
+                      keyAlias 'androiddebugkey'
+                      keyPassword 'android'
+                  }
+              }
+              buildTypes {
+                  debug {
+                      signingConfig signingConfigs.debug
+                  }
+              }
+          }
+          EOF
+          echo "----- build.gradle بعد الإضافة -----"
+          tail -20 android/app/build.gradle
+
       - name: Generate app icons
         run: npx capacitor-assets generate --android
 

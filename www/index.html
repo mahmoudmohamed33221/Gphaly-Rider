@@ -1955,6 +1955,7 @@ function refreshAllTooltipContents() {
         if (ref.cust) { setMarkerTooltipHtml(ref.cust, buildTooltipCardHtml(bonKey, 'cust')); }
         if (ref.shop) { setMarkerTooltipHtml(ref.shop, buildTooltipCardHtml(bonKey, 'shop')); }
     }
+    applyMapFocusVisuals(); // 🆕 التبني من جديد بيرجع الهنتات لوضعها الافتراضي - لازم نطبق حالة الإخفاء/التركيز تاني على طول
 }
 
 function onOrderMarkerClick(bonKey, role) {
@@ -2012,9 +2013,8 @@ function renderMapTab(animate) {
     // لو الخريطة شغالة أصلاً (مش أول مرة بتتفتح) منعملش إعادة تحميل كاملة - بس نحدّث الدبابيس
     if (riderMapInstance && document.getElementById('riderMapEl')) { updateRiderMapMarkers(); return; }
     var animClass = animate ? ' tab-anim' : '';
-    var html = '<div class="tab-pane on' + animClass + '" style="padding:0;height:calc(100vh - var(--hdr-h) - var(--nav-h) - 34px);display:flex;flex-direction:column;">'
-        + '<div class="tab-head" style="padding:10px 16px 6px;flex-shrink:0;"><h2 style="font-size:15px;"><i class="fa-solid fa-map-location-dot" style="margin-left:6px;color:var(--accent);"></i>الخريطة</h2></div>'
-        + '<div id="riderMapLegend" style="padding:0 16px 8px;display:flex;flex-wrap:nowrap;overflow-x:auto;gap:8px;flex-shrink:0;"></div>'
+    var html = '<div class="tab-pane on' + animClass + '" style="padding:0;margin:calc(-1 * (var(--hdr-h) + 14px)) 0 calc(-1 * (var(--nav-h) + 20px)) 0;height:calc(100vh - var(--hdr-h) - var(--nav-h));display:flex;flex-direction:column;">'
+        + '<div id="riderMapLegend" style="padding:10px 16px 8px;display:flex;flex-wrap:nowrap;overflow-x:auto;gap:8px;flex-shrink:0;"></div>'
         + '<div style="flex:1;position:relative;min-height:0;">'
         +   '<div id="riderMapEl" style="position:absolute;inset:0;"></div>'
         +   '<div id="riderRouteInfo" class="rdr-route-info"><span id="riderRouteInfoText"></span><button onclick="clearRiderRoute()" style="background:none;border:none;color:var(--danger);font-size:16px;padding:0 4px;"><i class="fa-solid fa-xmark"></i></button></div>'

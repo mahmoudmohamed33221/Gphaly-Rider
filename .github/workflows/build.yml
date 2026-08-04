@@ -12,6 +12,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # 🆕 مفتاح توقيع ثابت لكل النسخ - عشان تقدر تحدث فوق النسخة القديمة بدل ما تمسحها كل مرة.
+      # من غير الخطوة دي، Gradle كان بيولّد مفتاح توقيع عشوائي جديد في كل بيلد (لأن كل تشغيلة
+      # GitHub Actions بتبدأ من جهاز افتراضي فاضي تمامًا)، فالتحديث كان دايمًا بيفشل بخطأ
+      # "تعارض في الحزمة" لأن الشهادات مختلفة بين نسخة ونسخة.
+      - name: Use fixed debug keystore
+        run: |
+          mkdir -p ~/.android
+          cp debug.keystore ~/.android/debug.keystore
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:

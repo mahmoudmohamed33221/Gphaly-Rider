@@ -374,7 +374,7 @@
         @keyframes rdrCardBlink{0%,100%{box-shadow:none;}15%,45%,75%{box-shadow:0 0 0 3px var(--accent),0 0 22px 4px rgba(0,230,118,.55);}30%,60%,90%{box-shadow:none;}}
         .rdr-card-blink{animation:rdrCardBlink 2.1s ease-in-out;border-radius:16px;}
         .rdr-map-legend-item.dim{opacity:.4;}
-        .rdr-map-legend-item.active{border-color:var(--accent);background:rgba(0,230,118,.1);opacity:1;}
+        .rdr-map-legend-item.active{opacity:1;box-shadow:0 0 0 2.5px #fff,0 0 14px 2px rgba(255,255,255,.55);}
         .rdr-map-empty{padding:14px 16px;font-size:12px;color:var(--dim);text-align:center;}
         .leaflet-tooltip.rdr-tooltip{background:transparent;border:none;box-shadow:none;padding:0;transition:opacity .2s;}
         .leaflet-tooltip.rdr-tooltip::before{display:none;}
@@ -1985,7 +1985,8 @@ function legendMenuAction(action) {
     var bon = riderLegendMenuBon;
     closeLegendMenu();
     if (!bon) return;
-    if (action === 'show') { toggleMapFocus(bon); }
+    if (action === 'show-shop') { onOrderMarkerClick(bon, 'shop'); }
+    else if (action === 'show-cust') { onOrderMarkerClick(bon, 'cust'); }
     else if (action === 'goto') { goToOrderCard(bon); }
 }
 
@@ -2029,7 +2030,8 @@ function renderMapTab(animate) {
         +   '<div id="riderLegendMenuModal" class="rdr-route-choice-overlay" onclick="if(event.target===this)closeLegendMenu()">'
         +     '<div class="rdr-route-choice-card">'
         +       '<div class="rdr-route-choice-title">بون <span id="legendMenuBonLabel"></span></div>'
-        +       '<button class="rdr-route-choice-btn primary" onclick="legendMenuAction(\'show\')"><i class="fa-solid fa-map-location-dot"></i> اظهر بيانات على الخريطة</button>'
+        +       '<button class="rdr-route-choice-btn primary" onclick="legendMenuAction(\'show-shop\')"><i class="fa-solid fa-store"></i> اظهار بيانات المحل على الخريطة</button>'
+        +       '<button class="rdr-route-choice-btn primary" onclick="legendMenuAction(\'show-cust\')"><i class="fa-solid fa-user"></i> اظهار موقع العميل على الخريطة</button>'
         +       '<button class="rdr-route-choice-btn secondary" onclick="legendMenuAction(\'goto\')"><i class="fa-solid fa-arrow-up-right-from-square"></i> اذهب إلى كارت الطلب</button>'
         +       '<button class="rdr-route-choice-btn cancel" onclick="closeLegendMenu()">إلغاء</button>'
         +     '</div>'
@@ -2348,6 +2350,7 @@ function loadRoadNetworkCache() {
         if (data && data.net && data.net.length && data.center) {
             riderLocalRoadNetwork = data.net;
             riderRoadNetworkCenter = data.center;
+            riderLastAreaSegmentIdx = null;
         }
     } catch (e) {}
 }
@@ -2374,22 +2377,34 @@ async function fetchLocalRoadNetwork(lat, lng) {
                 }
             }
         }
-        if (segs.length) { riderLocalRoadNetwork = segs; riderRoadNetworkCenter = { lat: lat, lng: lng }; saveRoadNetworkCache(); }
+        if (segs.length) { riderLocalRoadNetwork = segs; riderRoadNetworkCenter = { lat: lat, lng: lng }; riderLastAreaSegmentIdx = null; saveRoadNetworkCache(); }
     } catch (e) { /* لو فشل الجلب، هنفضل شغالين بالكاش القديم لو موجود أو بالمكان الخام */ }
     riderRoadNetworkFetching = false;
 }
 
 // 🆕 بيلزق مكانك على أقرب نقطة في شبكة الشوارع القريبة المحفوظة - حساب محلي فوري بدون أي اتصال بالإنترنت
+var riderLastAreaSegmentIdx = null; // آخر شارع من الشبكة العامة كنا متأكدين إنك عليه - عشان نفضل عليه إلا لو اتأكدنا إنك بعدت عنه فعلًا
+
 function snapToLocalRoadNetwork(lat, lng) {
     if (!riderLocalRoadNetwork || !riderLocalRoadNetwork.length) return null;
-    var bestDist = Infinity, bestPoint = null;
+    var bestDist = Infinity, bestPoint = null, bestIdx = -1;
     for (var i = 0; i < riderLocalRoadNetwork.length; i++) {
         var seg = riderLocalRoadNetwork[i];
         var proj = projectPointToSegment(lng, lat, seg[0][1], seg[0][0], seg[1][1], seg[1][0]);
         var d = haversineKm(lat, lng, proj.y, proj.x);
-        if (d < bestDist) { bestDist = d; bestPoint = { lat: proj.y, lng: proj.x }; }
+        if (d < bestDist) { bestDist = d; bestPoint = { lat: proj.y, lng: proj.x }; bestIdx = i; }
     }
-    if (bestDist > 0.08) return null; // بعيد أوي عن أي شارع في الكاش - يمكن خرجت برة النطاق المحفوظ
+    if (bestDist > 0.08) { riderLastAreaSegmentIdx = null; return null; } // بعيد أوي عن أي شارع في الكاش - يمكن خرجت برة النطاق المحفوظ
+
+    // 🆕 استقرار: منسيبش الشارع اللي كنا عليه إلا لو الشارع الجديد أقرب بوضوح (فرق أكتر من 20 متر)
+    // ده اللي بيمنع القفز العشوائي بسبب رعشة الـ GPS الطبيعية وانت واقف أو ماشي
+    if (riderLastAreaSegmentIdx !== null && riderLastAreaSegmentIdx !== bestIdx && riderLastAreaSegmentIdx < riderLocalRoadNetwork.length) {
+        var prevSeg = riderLocalRoadNetwork[riderLastAreaSegmentIdx];
+        var prevProj = projectPointToSegment(lng, lat, prevSeg[0][1], prevSeg[0][0], prevSeg[1][1], prevSeg[1][0]);
+        var prevDist = haversineKm(lat, lng, prevProj.y, prevProj.x);
+        if (prevDist - bestDist < 0.02) { bestIdx = riderLastAreaSegmentIdx; bestPoint = { lat: prevProj.y, lng: prevProj.x }; }
+    }
+    riderLastAreaSegmentIdx = bestIdx;
     return bestPoint;
 }
 

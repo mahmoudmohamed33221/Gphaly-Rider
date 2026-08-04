@@ -1936,7 +1936,7 @@ function buildTooltipCardHtml(bonKey, role) {
         html += '<div class="rdr-tt-name">' + escHtml(meta.name || '') + '</div>';
         html += '<div class="rdr-tt-sub">' + escHtml(meta.sub || '') + '</div>';
         var distText = role === 'shop' ? ref.distRiderShopText : ref.distShopCustText;
-        html += '<div class="rdr-tt-dist"><i class="fa-solid ' + (role === 'shop' ? 'fa-motorcycle' : 'fa-house') + '"></i> ' + (distText || '—') + '</div>';
+        html += '<div class="rdr-tt-dist"><i class="fa-solid ' + (role === 'shop' ? 'fa-motorcycle' : 'fa-house') + '"></i> <span id="tt-dist-' + bonKey + '-' + role + '">' + (distText || '—') + '</span></div>';
         if (isActiveRoute && pos) { html += buildRouteBtnHtml(pos.lat, pos.lng, (role === 'shop' ? 'موقع المحل' : 'موقع العميل') + ' - بون ' + bonKey); }
     }
     html += '</div>';
@@ -1987,6 +1987,7 @@ function renderMapTab(animate) {
 
 function initRiderMap() {
     if (typeof L === 'undefined') { document.getElementById('riderMapEl').innerHTML = '<div class="rdr-map-empty"><i class="fa-solid fa-triangle-exclamation"></i><br>تعذر تحميل الخريطة، تأكد من الاتصال بالإنترنت</div>'; return; }
+    if (!riderRoadNetworkCenter) { loadRoadNetworkCache(); } // نحمّل كاش شبكة الشوارع المحفوظ من قبل لو مفيش واحد شغال في الذاكرة أصلاً
     riderMapInstance = L.map('riderMapEl', { zoomControl: true, attributionControl: false, dragging: true, touchZoom: true, scrollWheelZoom: true, doubleClickZoom: true, tap: true }).setView(RIDER_MAP_DEFAULT_CENTER, 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(riderMapInstance);
     riderMapMarkersLayer = L.layerGroup().addTo(riderMapInstance);
@@ -2018,8 +2019,8 @@ function updateRiderMapMarkers() {
         var custPos = parseLatLngFromLocationString(o.customerLocation);
         var shopPos = parseLatLngFromLocationString(o.storeLocation);
         var shopName = parseShopNameFromNotes(o.orderDetails, o.notes);
-        var shopCustKm = (custPos && shopPos) ? haversineKm(shopPos.lat, shopPos.lng, custPos.lat, custPos.lng).toFixed(1) + ' كم' : null;
-        var riderShopKm = (riderLiveMarker && shopPos) ? haversineKm(riderLiveMarker.getLatLng().lat, riderLiveMarker.getLatLng().lng, shopPos.lat, shopPos.lng).toFixed(1) + ' كم' : null;
+        var shopCustKm = (custPos && shopPos) ? haversineKm(shopPos.lat, shopPos.lng, custPos.lat, custPos.lng).toFixed(3) + ' كم' : null;
+        var riderShopKm = (riderLiveMarker && shopPos) ? haversineKm(riderLiveMarker.getLatLng().lat, riderLiveMarker.getLatLng().lng, shopPos.lat, shopPos.lng).toFixed(3) + ' كم' : null;
         riderMapMarkerRefs[bonKey] = {
             cust: null, shop: null, custPos: custPos, shopPos: shopPos,
             color: { cust: custColor, shop: shopColor },
@@ -2069,8 +2070,9 @@ function updateRiderDistancesLive(posOverride) {
     for (var bonKey in riderMapMarkerRefs) {
         var ref = riderMapMarkerRefs[bonKey];
         if (ref.shopPos) {
-            ref.distRiderShopText = haversineKm(pos.lat, pos.lng, ref.shopPos.lat, ref.shopPos.lng).toFixed(1) + ' كم';
-            if (ref.shop) { setMarkerTooltipHtml(ref.shop, buildTooltipCardHtml(bonKey, 'shop')); }
+            ref.distRiderShopText = haversineKm(pos.lat, pos.lng, ref.shopPos.lat, ref.shopPos.lng).toFixed(3) + ' كم';
+            var ttDistEl = document.getElementById('tt-dist-' + bonKey + '-shop');
+            if (ttDistEl) { ttDistEl.textContent = ref.distRiderShopText; } // تحديث خفيف بدون إعادة بناء الهنت كلها
             var chipEl = document.getElementById('dist-shop-' + bonKey);
             if (chipEl) chipEl.textContent = ref.distRiderShopText;
         }
@@ -2142,6 +2144,11 @@ async function fetchOsrmRoute(from, destLat, destLng, attempt) {
 var riderRouteFullCoords = null; // النسخة الكاملة من نقط المسار (محفوظة عشان لو الطيار رجع للخلف نقدر نرجع نعرض الجزء اللي اتمسح)
 var riderLastMatchedIdx = null; // آخر نقطة اتأكدنا إنها مكانك على المسار - عشان نبحث حواليها بس مش في المسار كله
 var riderLastTickTime = null; // وقت آخر تحديث GPS فعلي - عشان نحسب مدة الحركة الصح
+var riderLocalRoadNetwork = null; // شبكة الشوارع القريبة منك (محفوظة عشان الحركة تتحسب محليًا بدون نت)
+var riderRoadNetworkCenter = null; // مركز آخر منطقة جبنا شبكة شوارعها
+var riderRoadNetworkFetching = false;
+var RIDER_ROAD_NETWORK_RADIUS_M = 700;
+var RIDER_ROAD_NETWORK_REFRESH_KM = 0.35;
 var RIDER_MATCH_BACK_WINDOW = 8;
 var RIDER_MATCH_FWD_WINDOW = 40;
 var riderLastSnapTime = 0;
@@ -2248,6 +2255,71 @@ function placeOrUpdateLiveMarker(lat, lng) {
 }
 
 // 🆕 بيبعت إحداثية الـ GPS الخام لسيرفر الخرائط ويرجعله أقرب نقطة على الشارع نفسه (بيتستخدم بس لما مفيش مسار محمّل عندنا)
+// 🆕 بيجيب شبكة الشوارع الحقيقية حواليك (كل الخطوط جوه دايرة نصف قطرها ~700 متر) مرة واحدة، عشان بعد كده الحساب يبقى محلي فوري
+// 🆕 تخزين دائم لشبكة الشوارع القريبة (بتفضل موجودة حتى بعد إغلاق التطبيق أو إعادة تشغيل الموبايل)
+var RIDER_ROAD_CACHE_KEY = 'gphaly_rider_road_cache_v1';
+
+function saveRoadNetworkCache() {
+    try {
+        if (riderLocalRoadNetwork && riderRoadNetworkCenter) {
+            localStorage.setItem(RIDER_ROAD_CACHE_KEY, JSON.stringify({ net: riderLocalRoadNetwork, center: riderRoadNetworkCenter, savedAt: Date.now() }));
+        }
+    } catch (e) { /* لو مساحة التخزين ممتلئة أو غير متاحة، منعملش حاجة - مش مشكلة حرجة */ }
+}
+
+function loadRoadNetworkCache() {
+    try {
+        var raw = localStorage.getItem(RIDER_ROAD_CACHE_KEY);
+        if (!raw) return;
+        var data = JSON.parse(raw);
+        if (data && data.net && data.net.length && data.center) {
+            riderLocalRoadNetwork = data.net;
+            riderRoadNetworkCenter = data.center;
+        }
+    } catch (e) {}
+}
+
+async function fetchLocalRoadNetwork(lat, lng) {
+    if (riderRoadNetworkFetching) return;
+    riderRoadNetworkFetching = true;
+    try {
+        var query = '[out:json][timeout:15];way["highway"](around:' + RIDER_ROAD_NETWORK_RADIUS_M + ',' + lat + ',' + lng + ');out geom;';
+        var url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(query);
+        var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        var timeoutId = controller ? setTimeout(function () { controller.abort(); }, 12000) : null;
+        var res = await fetch(url, controller ? { signal: controller.signal } : {});
+        if (timeoutId) clearTimeout(timeoutId);
+        var data = await res.json();
+        var segs = [];
+        if (data && data.elements) {
+            for (var i = 0; i < data.elements.length; i++) {
+                var el = data.elements[i];
+                if (el.type === 'way' && el.geometry && el.geometry.length > 1) {
+                    for (var j = 0; j < el.geometry.length - 1; j++) {
+                        segs.push([[el.geometry[j].lat, el.geometry[j].lon], [el.geometry[j + 1].lat, el.geometry[j + 1].lon]]);
+                    }
+                }
+            }
+        }
+        if (segs.length) { riderLocalRoadNetwork = segs; riderRoadNetworkCenter = { lat: lat, lng: lng }; saveRoadNetworkCache(); }
+    } catch (e) { /* لو فشل الجلب، هنفضل شغالين بالكاش القديم لو موجود أو بالمكان الخام */ }
+    riderRoadNetworkFetching = false;
+}
+
+// 🆕 بيلزق مكانك على أقرب نقطة في شبكة الشوارع القريبة المحفوظة - حساب محلي فوري بدون أي اتصال بالإنترنت
+function snapToLocalRoadNetwork(lat, lng) {
+    if (!riderLocalRoadNetwork || !riderLocalRoadNetwork.length) return null;
+    var bestDist = Infinity, bestPoint = null;
+    for (var i = 0; i < riderLocalRoadNetwork.length; i++) {
+        var seg = riderLocalRoadNetwork[i];
+        var proj = projectPointToSegment(lng, lat, seg[0][1], seg[0][0], seg[1][1], seg[1][0]);
+        var d = haversineKm(lat, lng, proj.y, proj.x);
+        if (d < bestDist) { bestDist = d; bestPoint = { lat: proj.y, lng: proj.x }; }
+    }
+    if (bestDist > 0.08) return null; // بعيد أوي عن أي شارع في الكاش - يمكن خرجت برة النطاق المحفوظ
+    return bestPoint;
+}
+
 async function snapToRoad(lat, lng) {
     try {
         var url = 'https://router.project-osrm.org/nearest/v1/driving/' + lng + ',' + lat;
@@ -2353,7 +2425,7 @@ async function startRiderLiveTracking() {
         }
 
         if (!riderLiveMarker) {
-            // 🆕 أول ظهور للسهم مبيتحطش خام - بننتظر أول تصحيح (محلي لو فيه مسار، أو من السيرفر لو لأ) عشان مايبانش في مكان غلط
+            // 🆕 أول ظهور للسهم مبيتحطش خام - بننتظر أول تصحيح (محلي لو فيه مسار، أو من شبكة الشوارع القريبة، أو من السيرفر كحل سريع مؤقت) عشان مايبانش في مكان غلط
             if (riderRouteFullCoords) {
                 var firstLocalSnap = snapToLoadedRoute(lat, lng);
                 var firstPos = firstLocalSnap || { lat: lat, lng: lng };
@@ -2361,12 +2433,19 @@ async function startRiderLiveTracking() {
                 updateRiderDistancesLive(firstPos);
                 if (firstLocalSnap) { trimRouteProgressAt(firstLocalSnap); }
             } else {
-                riderLastSnapTime = Date.now();
-                snapToRoad(lat, lng).then(function (snapped) {
-                    var target = snapped || { lat: lat, lng: lng };
-                    placeOrUpdateLiveMarker(target.lat, target.lng);
-                    updateRiderDistancesLive(target);
-                });
+                var firstAreaSnap = snapToLocalRoadNetwork(lat, lng);
+                if (firstAreaSnap) {
+                    placeOrUpdateLiveMarker(firstAreaSnap.lat, firstAreaSnap.lng);
+                    updateRiderDistancesLive(firstAreaSnap);
+                } else {
+                    riderLastSnapTime = Date.now();
+                    snapToRoad(lat, lng).then(function (snapped) {
+                        var target = snapped || { lat: lat, lng: lng };
+                        placeOrUpdateLiveMarker(target.lat, target.lng);
+                        updateRiderDistancesLive(target);
+                    });
+                }
+                fetchLocalRoadNetwork(lat, lng); // نبدأ نجيب شبكة شوارع المنطقة في الخلفية عشان الحركة الجاية تبقى محلية فورية
             }
             return;
         }
@@ -2382,18 +2461,19 @@ async function startRiderLiveTracking() {
             }
         }
 
-        // لو مفيش مسار محمّل: نحرك السهم بمكانه الخام فورًا كل نبضة (مش محتاج نت خالص عشان يتحرك معاك)
-        animateLiveMarkerTo(lat, lng, animDuration);
-        updateRiderDistancesLive({ lat: lat, lng: lng });
+        // لو مفيش مسار محمّل: نستخدم شبكة الشوارع القريبة المحفوظة عندنا لو موجودة - إلزاق محلي فوري بدون نت
+        var localAreaSnap = snapToLocalRoadNetwork(lat, lng);
+        if (localAreaSnap) {
+            animateLiveMarkerTo(localAreaSnap.lat, localAreaSnap.lng, animDuration);
+            updateRiderDistancesLive(localAreaSnap);
+        } else {
+            animateLiveMarkerTo(lat, lng, animDuration);
+            updateRiderDistancesLive({ lat: lat, lng: lng });
+        }
 
-        // ولو فيه نت متاح، نحاول نظبطه فوق الشارع كتصحيح إضافي بس - مش شرط عشان يتحرك
-        var now = Date.now();
-        if (now - riderLastSnapTime >= RIDER_SNAP_MIN_INTERVAL_MS) {
-            riderLastSnapTime = now;
-            snapToRoad(lat, lng).then(function (snapped) {
-                if (snapped) { animateLiveMarkerTo(snapped.lat, snapped.lng, 700); updateRiderDistancesLive(snapped); }
-                // لو فشل (مفيش نت) منعملش حاجة - المكان الخام أصلاً متعروض وبيتحرك عادي
-            });
+        // لو مفيش شبكة شوارع محفوظة قريبة من مكاننا الحالي (أول مرة أو اتحركنا بعيد)، نجيبها في الخلفية
+        if (!riderRoadNetworkCenter || haversineKm(lat, lng, riderRoadNetworkCenter.lat, riderRoadNetworkCenter.lng) > RIDER_ROAD_NETWORK_REFRESH_KM) {
+            fetchLocalRoadNetwork(lat, lng);
         }
     }, function (err) { console.warn('rider geo watch error', err); }, { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 });
 }

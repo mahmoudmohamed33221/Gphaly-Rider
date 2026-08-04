@@ -385,8 +385,7 @@
         .rdr-tt-sub{font-size:9.5px;font-weight:600;opacity:.92;}
         .rdr-tt-dist{font-size:9.5px;font-weight:800;margin-top:1px;}
         .rdr-tooltip.rdr-tooltip-focus .rdr-tt-card{padding:8px 14px;min-width:118px;}
-        .rdr-tooltip.rdr-tooltip-focus .rdr-tt-bon{font-size:14px;color:#39FF14;animation:rdrBonGlow 1.3s ease-in-out infinite;}
-        @keyframes rdrBonGlow{0%,100%{text-shadow:0 0 4px #39FF14,0 0 8px #39FF14;}50%{text-shadow:0 0 10px #39FF14,0 0 20px #39FF14,0 0 30px #39FF14;}}
+        .rdr-tooltip.rdr-tooltip-focus .rdr-tt-bon{font-size:14px;color:#fff;}
         .rdr-tooltip.rdr-tooltip-focus .rdr-tt-name{font-size:11.5px;}
         .rdr-tooltip.rdr-tooltip-focus .rdr-tt-sub{font-size:11px;}
         .rdr-tooltip.rdr-tooltip-focus .rdr-tt-dist{font-size:11px;}
@@ -1936,7 +1935,7 @@ function buildTooltipCardHtml(bonKey, role) {
     var isActiveRoute = riderMapActiveRouteMarker && riderMapActiveRouteMarker.bonKey === bonKey && riderMapActiveRouteMarker.role === role;
     var detailed = isActiveRoute || isMapZoomDetailed() || riderMapFocusedBon === bonKey;
     var html = '<div class="rdr-tt-card" style="background:' + color + ';border-color:' + color + ';--tt-color:' + color + ';">';
-    html += '<div class="rdr-tt-bon">بون ' + bonKey + '</div>';
+    html += '<div class="rdr-tt-bon">#' + bonKey + '</div>';
     if (detailed) {
         html += '<div class="rdr-tt-name">' + escHtml(meta.name || '') + '</div>';
         html += '<div class="rdr-tt-sub">' + escHtml(meta.sub || '') + '</div>';
@@ -2013,7 +2012,7 @@ function renderMapTab(animate) {
     // لو الخريطة شغالة أصلاً (مش أول مرة بتتفتح) منعملش إعادة تحميل كاملة - بس نحدّث الدبابيس
     if (riderMapInstance && document.getElementById('riderMapEl')) { updateRiderMapMarkers(); return; }
     var animClass = animate ? ' tab-anim' : '';
-    var html = '<div class="tab-pane on' + animClass + '" style="padding:0;margin:calc(-1 * (var(--hdr-h) + 14px)) 0 calc(-1 * (var(--nav-h) + 20px)) 0;height:calc(100vh - var(--hdr-h) - var(--nav-h));display:flex;flex-direction:column;">'
+    var html = '<div class="tab-pane on' + animClass + '" style="padding:0;height:calc(100vh - var(--hdr-h) - 14px - var(--nav-h));display:flex;flex-direction:column;">'
         + '<div id="riderMapLegend" style="padding:10px 16px 8px;display:flex;flex-wrap:nowrap;overflow-x:auto;gap:8px;flex-shrink:0;"></div>'
         + '<div style="flex:1;position:relative;min-height:0;">'
         +   '<div id="riderMapEl" style="position:absolute;inset:0;"></div>'

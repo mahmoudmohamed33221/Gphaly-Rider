@@ -364,7 +364,7 @@
         .rdr-live-puck{width:28px;height:28px;position:relative;transform:rotate(var(--heading,0deg));transition:transform .25s ease;}
         .rdr-live-puck::before{content:'';position:absolute;inset:0;background:#1E6FEB;clip-path:polygon(50% 0%, 88% 100%, 50% 76%, 12% 100%);filter:drop-shadow(0 0 2px #fff) drop-shadow(0 0 1.5px #fff) drop-shadow(0 2px 3px rgba(0,0,0,.45));}
         .rdr-map-legend-item{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:8px 12px;border-radius:10px;cursor:pointer;border:1.5px solid transparent;transition:opacity .2s,border-color .2s;flex-shrink:0;min-width:132px;}
-        .rdr-lg-bon{display:flex;align-items:center;gap:4px;font-size:12.5px;font-weight:900;}
+        .rdr-lg-bon{display:flex;align-items:center;justify-content:center;gap:4px;font-size:12.5px;font-weight:900;width:100%;}
         .rdr-lg-name,.rdr-lg-shop{display:flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;color:#fff;}
         .rdr-lg-shop{font-weight:600;}
         .rdr-lg-name i,.rdr-lg-shop i{width:11px;text-align:center;font-size:9.5px;color:#fff;}
@@ -2075,8 +2075,8 @@ function updateRiderMapMarkers() {
         var custPos = parseLatLngFromLocationString(o.customerLocation);
         var shopPos = parseLatLngFromLocationString(o.storeLocation);
         var shopName = parseShopNameFromNotes(o.orderDetails, o.notes);
-        var shopCustKm = (custPos && shopPos) ? haversineKm(shopPos.lat, shopPos.lng, custPos.lat, custPos.lng).toFixed(3) + ' كم' : null;
-        var riderShopKm = (riderLiveMarker && shopPos) ? haversineKm(riderLiveMarker.getLatLng().lat, riderLiveMarker.getLatLng().lng, shopPos.lat, shopPos.lng).toFixed(3) + ' كم' : null;
+        var shopCustKm = (custPos && shopPos) ? (roadDistanceKm(shopPos.lat, shopPos.lng, custPos.lat, custPos.lng) || haversineKm(shopPos.lat, shopPos.lng, custPos.lat, custPos.lng)).toFixed(3) + ' كم' : null;
+        var riderShopKm = (riderLiveMarker && shopPos) ? (roadDistanceKm(riderLiveMarker.getLatLng().lat, riderLiveMarker.getLatLng().lng, shopPos.lat, shopPos.lng) || haversineKm(riderLiveMarker.getLatLng().lat, riderLiveMarker.getLatLng().lng, shopPos.lat, shopPos.lng)).toFixed(3) + ' كم' : null;
         riderMapMarkerRefs[bonKey] = {
             cust: null, shop: null, custPos: custPos, shopPos: shopPos,
             color: { cust: color, shop: color },
@@ -2121,13 +2121,23 @@ function updateRiderMapMarkers() {
 }
 
 // 🆕 تحديث خفيف لمسافة "الطيار للمحل" بس (بتتحرك مع كل نبضة GPS من غير إعادة رسم الدبابيس كلها)
+var riderLastRoadDistCalcTime = 0;
+var RIDER_ROAD_DIST_CALC_INTERVAL_MS = 2500; // نحسب المسافة الدقيقة على الشوارع كل ثانيتين ونص عشان الأداء، وبين كل حساب والتاني بنستخدم تقريب بسيط سريع
+
 function updateRiderDistancesLive(posOverride) {
     if (!riderLiveMarker && !posOverride) return;
     var pos = posOverride || riderLiveMarker.getLatLng();
+    var now = Date.now();
+    var doFullCalc = (now - riderLastRoadDistCalcTime) >= RIDER_ROAD_DIST_CALC_INTERVAL_MS;
+    if (doFullCalc) { riderLastRoadDistCalcTime = now; }
     for (var bonKey in riderMapMarkerRefs) {
         var ref = riderMapMarkerRefs[bonKey];
         if (ref.shopPos) {
-            ref.distRiderShopText = haversineKm(pos.lat, pos.lng, ref.shopPos.lat, ref.shopPos.lng).toFixed(3) + ' كم';
+            if (doFullCalc) {
+                ref.distRiderShopText = (roadDistanceKm(pos.lat, pos.lng, ref.shopPos.lat, ref.shopPos.lng) || haversineKm(pos.lat, pos.lng, ref.shopPos.lat, ref.shopPos.lng)).toFixed(3) + ' كم';
+            } else {
+                ref.distRiderShopText = haversineKm(pos.lat, pos.lng, ref.shopPos.lat, ref.shopPos.lng).toFixed(3) + ' كم';
+            }
             var ttDistEl = document.getElementById('tt-dist-' + bonKey + '-shop');
             if (ttDistEl) { ttDistEl.textContent = ref.distRiderShopText; } // تحديث خفيف بدون إعادة بناء الهنت كلها
             var chipEl = document.getElementById('dist-shop-' + bonKey);
@@ -2174,7 +2184,7 @@ function applyMapFocusVisuals() {
             if (target) {
                 // 🆕 وضع التحديد: بس الدبوس المختار واضح بهنته، وأي حاجة تانية (حتى الدبوس التاني بنفس الطلب) تختفي تمامًا
                 var isTarget = target.bonKey === bon && target.role === role;
-                if (iconEl) { iconEl.style.opacity = isTarget ? '1' : '0'; }
+                if (iconEl) { iconEl.style.opacity = isTarget ? '1' : '0'; iconEl.style.pointerEvents = isTarget ? 'auto' : 'none'; }
                 m.setZIndexOffset(isTarget ? 1000 : 0);
                 if (container) {
                     if (isTarget) { container.style.display = ''; container.style.opacity = riderRouteLayer ? '0.6' : '1'; container.classList.add('rdr-tooltip-focus'); }
@@ -2182,7 +2192,7 @@ function applyMapFocusVisuals() {
                 }
             } else {
                 // 🆕 الوضع الطبيعي: كل الدبابيس واضحة، بدون أي هنتات خالص
-                if (iconEl) { iconEl.style.opacity = '1'; }
+                if (iconEl) { iconEl.style.opacity = '1'; iconEl.style.pointerEvents = 'auto'; }
                 m.setZIndexOffset(0);
                 if (container) { container.style.display = 'none'; container.classList.remove('rdr-tooltip-focus'); }
             }
@@ -2248,7 +2258,7 @@ async function startRiderRoute(destLat, destLng, label) {
         riderLastSnapTime = 0; // نخلي أول نبضة GPS بعد رسم المسار تصحح مكانك على طول
         applyMapFocusVisuals(); // 🆕 دلوقتي المسار شغال - نفعّل وضع عرض الدبوس المستهدف بس
         riderMapInstance.fitBounds(riderRouteLayer.getBounds(), { padding: [55, 55] });
-        var km = (data.routes[0].distance / 1000).toFixed(1);
+        var km = (data.routes[0].distance / 1000).toFixed(3);
         var mins = Math.round(data.routes[0].duration / 60);
         if (infoText) infoText.innerHTML = '<i class="fa-solid fa-route" style="margin-left:5px;"></i>' + escHtml(label) + ' — ' + km + ' كم — تقريبًا ' + mins + ' دقيقة';
     } catch (e) {
@@ -2351,8 +2361,69 @@ function loadRoadNetworkCache() {
             riderLocalRoadNetwork = data.net;
             riderRoadNetworkCenter = data.center;
             riderLastAreaSegmentIdx = null;
+            buildRoadGraph();
         }
     } catch (e) {}
+}
+
+// 🆕 بنبني شبكة تقاطعات (graph) من شبكة الشوارع، عشان نقدر نحسب "أقصر مسار على الشوارع" محليًا بدون أي نت
+var riderRoadGraph = null;
+
+function coordKey(lat, lng) { return lat.toFixed(5) + ',' + lng.toFixed(5); }
+
+function buildRoadGraph() {
+    var graph = {};
+    if (!riderLocalRoadNetwork) { riderRoadGraph = null; return; }
+    for (var i = 0; i < riderLocalRoadNetwork.length; i++) {
+        var seg = riderLocalRoadNetwork[i];
+        var aKey = coordKey(seg[0][0], seg[0][1]);
+        var bKey = coordKey(seg[1][0], seg[1][1]);
+        var d = haversineKm(seg[0][0], seg[0][1], seg[1][0], seg[1][1]);
+        if (!graph[aKey]) graph[aKey] = { lat: seg[0][0], lng: seg[0][1], edges: [] };
+        if (!graph[bKey]) graph[bKey] = { lat: seg[1][0], lng: seg[1][1], edges: [] };
+        graph[aKey].edges.push({ to: bKey, dist: d });
+        graph[bKey].edges.push({ to: aKey, dist: d });
+    }
+    riderRoadGraph = graph;
+}
+
+function nearestGraphNode(lat, lng) {
+    if (!riderRoadGraph) return null;
+    var bestKey = null, bestDist = Infinity;
+    for (var key in riderRoadGraph) {
+        var node = riderRoadGraph[key];
+        var d = haversineKm(lat, lng, node.lat, node.lng);
+        if (d < bestDist) { bestDist = d; bestKey = key; }
+    }
+    return bestKey ? { key: bestKey, dist: bestDist } : null;
+}
+
+// 🆕 أقصر مسافة على الشوارع الفعلية بين نقطتين (Dijkstra) - حساب محلي بالكامل، من غير أي اتصال بالإنترنت
+function roadDistanceKm(fromLat, fromLng, toLat, toLng) {
+    if (!riderRoadGraph) return null;
+    var from = nearestGraphNode(fromLat, fromLng);
+    var to = nearestGraphNode(toLat, toLng);
+    if (!from || !to) return null;
+    var dist = {}; dist[from.key] = 0;
+    var visited = {};
+    var queue = [{ key: from.key, d: 0 }];
+    var resultDist = null;
+    while (queue.length) {
+        queue.sort(function (a, b) { return a.d - b.d; });
+        var cur = queue.shift();
+        if (visited[cur.key]) continue;
+        visited[cur.key] = true;
+        if (cur.key === to.key) { resultDist = cur.d; break; }
+        var node = riderRoadGraph[cur.key];
+        if (!node) continue;
+        for (var i = 0; i < node.edges.length; i++) {
+            var e = node.edges[i];
+            var nd = cur.d + e.dist;
+            if (dist[e.to] === undefined || nd < dist[e.to]) { dist[e.to] = nd; queue.push({ key: e.to, d: nd }); }
+        }
+    }
+    if (resultDist === null) return null; // مفيش طريق موصل بينهم في الشبكة اللي عندنا
+    return resultDist + from.dist + to.dist; // + المسافة الصغيرة من النقطتين الأصليتين لأقرب تقاطع
 }
 
 async function fetchLocalRoadNetwork(lat, lng) {
@@ -2377,7 +2448,7 @@ async function fetchLocalRoadNetwork(lat, lng) {
                 }
             }
         }
-        if (segs.length) { riderLocalRoadNetwork = segs; riderRoadNetworkCenter = { lat: lat, lng: lng }; riderLastAreaSegmentIdx = null; saveRoadNetworkCache(); }
+        if (segs.length) { riderLocalRoadNetwork = segs; riderRoadNetworkCenter = { lat: lat, lng: lng }; riderLastAreaSegmentIdx = null; buildRoadGraph(); saveRoadNetworkCache(); }
     } catch (e) { /* لو فشل الجلب، هنفضل شغالين بالكاش القديم لو موجود أو بالمكان الخام */ }
     riderRoadNetworkFetching = false;
 }

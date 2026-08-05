@@ -178,7 +178,7 @@
         .oc-dist-point{display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0;min-width:44px;}
         .oc-dist-point i{font-size:14px;color:var(--accent);}
         .oc-dist-point span{font-size:8.5px;font-weight:700;color:var(--muted);white-space:nowrap;}
-        .oc-dist-val{flex:1;text-align:center;font-size:11px;font-weight:900;color:#fff;cursor:pointer;padding:4px 2px;border-bottom:1.5px dashed var(--border-subtle);}
+        .oc-dist-val{flex:1;text-align:center;font-size:11px;font-weight:900;color:#fff;cursor:pointer;padding:4px 2px;}
         .oc-dist-val:active{opacity:.6;}
         .oc-time-grid{position:relative;z-index:1;display:grid;grid-template-columns:1fr 1fr 1fr;padding:10px 0;margin:10px 16px;border-radius:12px;background:var(--bg);border:1px solid var(--border);}
         .oc-time-item{text-align:center;padding:0 4px;}
@@ -200,16 +200,17 @@
         .oc-addr-text strong{font-weight:700;}
         .oc-landmark{color:var(--accent);font-weight:600;font-size:11px;display:block;margin-top:3px;opacity:.85;}
 
-        .oc-details{position:relative;z-index:1;margin:0 16px 10px;}
-        .oc-details-header{display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding:9px 12px;border-radius:10px;background:var(--bg);border:1px solid var(--border);transition:background .2s;user-select:none;-webkit-user-select:none;}
+        .oc-details{position:relative;z-index:1;margin:0 16px 10px;border-radius:10px;background:var(--bg);border:1px solid var(--border);overflow:hidden;}
+        .oc-details-header{display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding:9px 12px;transition:background .2s;user-select:none;-webkit-user-select:none;}
         .oc-details-header:active{background:rgba(0,230,118,.05);}
         .oc-details-lbl{font-size:11px;color:var(--accent);font-weight:700;display:flex;align-items:center;gap:5px;}
         .oc-cat-name{color:var(--fg);font-weight:800;font-size:12px;margin-right:2px;}
         .oc-details-arrow{color:var(--accent);font-size:11px;transition:transform .3s ease;opacity:.7;}
         .oc-details-arrow.open{transform:rotate(180deg);opacity:1;}
-        .oc-details-body{max-height:0;overflow:hidden;transition:max-height .4s ease, margin-top .3s ease, opacity .3s ease;opacity:0;margin-top:0;}
-        .oc-details-body.open{max-height:300px;opacity:1;margin-top:6px;}
-        .oc-details-box{background:var(--bg);padding:10px 12px;border-radius:10px;border:1px solid var(--border);font-size:12px;color:#E5E7EB;white-space:pre-line;line-height:1.9;max-height:120px;overflow-y:auto;font-weight:500;}
+        .oc-details-body{max-height:0;overflow:hidden;transition:max-height .4s ease, opacity .3s ease;opacity:0;}
+        .oc-details-body.open{max-height:300px;opacity:1;}
+        .oc-details-box{padding:0 12px 12px;border-top:1px solid var(--border-subtle);margin-top:2px;padding-top:8px;font-size:12px;color:#E5E7EB;white-space:pre-line;line-height:1.9;max-height:120px;overflow-y:auto;font-weight:500;}
+
 
         .oc-contents{position:relative;z-index:1;margin:0 16px 10px;}
         .oc-contents-label{display:block;font-size:11px;color:var(--accent);font-weight:700;margin-bottom:4px;}
@@ -1806,16 +1807,19 @@ function buildOrderCard(o) {
     if (phase === 'new') { badgeHTML = '<span class="oc-badge badge-glow">طلب جديد</span>'; } else if (phase === 'accepted') { badgeHTML = '<span class="oc-badge badge-acc">تم القبول</span>'; headerIcon = 'fa-receipt'; } else if (phase === 'preparing') { badgeHTML = '<span class="oc-badge badge-prep">جاري التحضير</span>'; headerIcon = 'fa-receipt'; } else if (phase === 'delivering') { badgeHTML = '<span class="oc-badge badge-deli">جاري التوصيل</span>'; headerIcon = 'fa-receipt'; }
     var orderTS = parseOrderTime(o.orderTime); var delayResult = formatDelay(Date.now() - orderTS); var addrParts = []; if (o.ezba) addrParts.push('عزبة: ' + o.ezba); if (o.street) addrParts.push('شارع: ' + o.street); var addrStr = addrParts.join(' / '); var landmarkStr = o.landmark ? o.landmark : ''; var category = extractCategory(o.orderDetails);
     var pendingBadge = hasPendingAction(o.bon) ? ' <i class="fa-solid fa-triangle-exclamation" style="color:#FBBF24;font-size:12px;" title="لسه ماتبعتش للسيرفر - هيتبعت أوتوماتيك لما النت يرجع"></i>' : '';
-    var html = '<div class="ocard' + arriveClass + '" id="card-bon-' + o.bon + '"><div class="oc-hdr"><span class="oc-bon"><i class="fa-solid ' + headerIcon + '"></i> بون: ' + o.bon + pendingBadge + '</span>' + badgeHTML + '</div><div class="oc-info-box"><div class="oc-info-top"><div class="oc-name-row"><i class="fa-solid fa-user"></i><span class="oc-name-text">' + escHtml(o.name || '—') + '</span></div><a class="oc-phone-btn" href="tel:' + (o.phone || '') + '" onclick="event.stopPropagation()"><i class="fa-solid fa-phone"></i></a></div>';
-    if (addrStr) { html += '<div class="oc-addr"><i class="fa-solid fa-location-dot"></i><div class="oc-addr-text"><strong>' + escHtml(addrStr) + '</strong>' + (landmarkStr ? '<span class="oc-landmark">(علامة: ' + escHtml(landmarkStr) + ')</span>' : '') + '</div></div>'; }
-    html += '</div>';
+    var html = '<div class="ocard' + arriveClass + '" id="card-bon-' + o.bon + '"><div class="oc-hdr"><span class="oc-bon"><i class="fa-solid ' + headerIcon + '"></i> بون: ' + o.bon + pendingBadge + '</span>' + badgeHTML + '</div>';
+    if (phase !== 'new') {
+        html += '<div class="oc-info-box"><div class="oc-info-top"><div class="oc-name-row"><i class="fa-solid fa-user"></i><span class="oc-name-text">' + escHtml(o.name || '—') + '</span></div><a class="oc-phone-btn" href="tel:' + (o.phone || '') + '" onclick="event.stopPropagation()"><i class="fa-solid fa-phone"></i></a></div>';
+        if (addrStr) { html += '<div class="oc-addr"><i class="fa-solid fa-location-dot"></i><div class="oc-addr-text"><strong>' + escHtml(addrStr) + '</strong>' + (landmarkStr ? '<span class="oc-landmark">(علامة: ' + escHtml(landmarkStr) + ')</span>' : '') + '</div></div>'; }
+        html += '</div>';
+    }
     if (phase === 'new') {
         var parsed = parseOrderDetailsStructured(o.orderDetails);
         var dist = computeOrderDistances(o);
         if (o.orderDetails) {
             html += '<div class="oc-details"><div class="oc-details-header" onclick="toggleDetails(' + o.bon + ')"><div class="oc-details-lbl"><i class="fa-solid fa-store"></i> <span class="oc-cat-name">' + escHtml(category || 'الطلب') + '</span></div><i class="fa-solid fa-chevron-down oc-details-arrow" id="arr-' + o.bon + '"></i></div><div class="oc-details-body" id="dtl-' + o.bon + '"><div class="oc-details-box">'
-                + (parsed.shopName ? '<b>المحل المطلوب:-</b> ' + escHtml(parsed.shopName) + '<br>' : '')
-                + (parsed.shopAddress ? '<b>عنوان المحل:</b> ' + escHtml(parsed.shopAddress) + '<br>' : '')
+                + (parsed.shopName ? '<b><i class="fa-solid fa-store" style="color:var(--accent);margin-left:4px;"></i>المحل المطلوب:-</b> ' + escHtml(parsed.shopName) + '<br>' : '')
+                + (parsed.shopAddress ? '<b><i class="fa-solid fa-location-dot" style="color:var(--danger);margin-left:4px;"></i>عنوان المحل:</b> ' + escHtml(parsed.shopAddress) + '<br>' : '')
                 + '----------------------<br>'
                 + escHtml(parsed.items || o.orderDetails)
                 + '</div></div></div>';
@@ -1825,9 +1829,9 @@ function buildOrderCard(o) {
         }
         html += '<div class="oc-dist-row">'
             + '<div class="oc-dist-point"><i class="fa-solid fa-motorcycle"></i><span>موقعك</span></div>'
-            + '<div class="oc-dist-val"' + (dist.shopPos ? ' onclick="event.stopPropagation();openRouteChoice(' + dist.shopPos.lat + ',' + dist.shopPos.lng + ',\'موقع المحل - بون ' + o.bon + '\')"' : '') + '><span id="ocdist-shop-' + o.bon + '">' + (dist.distRiderShop || '—') + '</span></div>'
+            + '<div class="oc-dist-val"' + (dist.shopPos ? ' onclick="event.stopPropagation();openRouteChoice(' + dist.shopPos.lat + ',' + dist.shopPos.lng + ',\'موقع المحل - بون ' + o.bon + '\',\'' + o.bon + '\',\'shop\')"' : '') + '><span id="ocdist-shop-' + o.bon + '">' + (dist.distRiderShop || '—') + '</span></div>'
             + '<div class="oc-dist-point"><i class="fa-solid fa-store"></i><span>موقع المحل</span></div>'
-            + '<div class="oc-dist-val"' + (dist.custPos ? ' onclick="event.stopPropagation();openRouteChoice(' + dist.custPos.lat + ',' + dist.custPos.lng + ',\'موقع العميل - بون ' + o.bon + '\')"' : '') + '><span id="ocdist-cust-' + o.bon + '">' + (dist.distShopCust || '—') + '</span></div>'
+            + '<div class="oc-dist-val"' + (dist.custPos ? ' onclick="event.stopPropagation();openRouteChoice(' + dist.custPos.lat + ',' + dist.custPos.lng + ',\'موقع العميل - بون ' + o.bon + '\',\'' + o.bon + '\',\'cust\')"' : '') + '><span id="ocdist-cust-' + o.bon + '">' + (dist.distShopCust || '—') + '</span></div>'
             + '<div class="oc-dist-point"><i class="fa-solid fa-house"></i><span>موقع العميل</span></div>'
             + '</div>';
         html += '<div class="oc-time-grid"><div class="oc-time-item"><span class="oc-time-lbl">اليوم</span><span class="oc-time-val" style="direction:rtl;">' + (o.orderDayDate || '---') + '</span></div><div class="oc-time-item"><span class="oc-time-lbl">الساعة</span><span class="oc-time-val">' + (o.orderTime || '---') + '</span></div><div class="oc-time-item"><span class="oc-time-lbl">التأخير</span><span class="oc-time-val" data-delay-ts="' + orderTS + '" style="direction:rtl;color:' + delayResult.color + ';font-weight:900;">' + delayResult.text + '</span></div></div>';
@@ -1922,8 +1926,8 @@ function buildRouteBtnHtml(lat, lng, label) {
 // 🆕 مودال اختيار: يكمل جوه التطبيق ولا يفتح جوجل ماب نفسه
 var riderPendingRouteTarget = null;
 
-function openRouteChoice(lat, lng, label) {
-    riderPendingRouteTarget = { lat: lat, lng: lng, label: label };
+function openRouteChoice(lat, lng, label, bonKey, role) {
+    riderPendingRouteTarget = { lat: lat, lng: lng, label: label, bonKey: bonKey || null, role: role || null };
     var modal = document.getElementById('riderRouteChoiceModal');
     if (modal) modal.style.display = 'flex';
 }
@@ -1944,10 +1948,15 @@ function confirmRouteChoice(mode) {
             var tries = 0;
             var waitForLive = setInterval(function () {
                 tries++;
-                if (riderLiveMarker) { clearInterval(waitForLive); startRiderRoute(t.lat, t.lng, t.label); }
+                if (riderLiveMarker) {
+                    clearInterval(waitForLive);
+                    if (t.bonKey && t.role) { riderMapFocusedBon = t.bonKey; riderMapActiveRouteMarker = { bonKey: t.bonKey, role: t.role }; applyMapFocusVisuals(); refreshAllTooltipContents(); }
+                    startRiderRoute(t.lat, t.lng, t.label);
+                }
                 else if (tries > 40) { clearInterval(waitForLive); }
             }, 500);
         } else {
+            if (t.bonKey && t.role) { riderMapFocusedBon = t.bonKey; riderMapActiveRouteMarker = { bonKey: t.bonKey, role: t.role }; applyMapFocusVisuals(); refreshAllTooltipContents(); }
             startRiderRoute(t.lat, t.lng, t.label);
         }
     } else if (mode === 'gmaps') {

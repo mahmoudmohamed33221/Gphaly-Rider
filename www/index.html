@@ -2075,8 +2075,8 @@ function updateRiderMapMarkers() {
         var custPos = parseLatLngFromLocationString(o.customerLocation);
         var shopPos = parseLatLngFromLocationString(o.storeLocation);
         var shopName = parseShopNameFromNotes(o.orderDetails, o.notes);
-        var shopCustKm = (custPos && shopPos) ? (roadDistanceKm(shopPos.lat, shopPos.lng, custPos.lat, custPos.lng) || haversineKm(shopPos.lat, shopPos.lng, custPos.lat, custPos.lng)).toFixed(3) + ' كم' : null;
-        var riderShopKm = (riderLiveMarker && shopPos) ? (roadDistanceKm(riderLiveMarker.getLatLng().lat, riderLiveMarker.getLatLng().lng, shopPos.lat, shopPos.lng) || haversineKm(riderLiveMarker.getLatLng().lat, riderLiveMarker.getLatLng().lng, shopPos.lat, shopPos.lng)).toFixed(3) + ' كم' : null;
+        var shopCustKm = (custPos && shopPos) ? haversineKm(shopPos.lat, shopPos.lng, custPos.lat, custPos.lng).toFixed(3) + ' كم' : null;
+        var riderShopKm = (riderLiveMarker && shopPos) ? haversineKm(riderLiveMarker.getLatLng().lat, riderLiveMarker.getLatLng().lng, shopPos.lat, shopPos.lng).toFixed(3) + ' كم' : null;
         riderMapMarkerRefs[bonKey] = {
             cust: null, shop: null, custPos: custPos, shopPos: shopPos,
             color: { cust: color, shop: color },
@@ -2127,17 +2127,10 @@ var RIDER_ROAD_DIST_CALC_INTERVAL_MS = 2500; // نحسب المسافة الدق
 function updateRiderDistancesLive(posOverride) {
     if (!riderLiveMarker && !posOverride) return;
     var pos = posOverride || riderLiveMarker.getLatLng();
-    var now = Date.now();
-    var doFullCalc = (now - riderLastRoadDistCalcTime) >= RIDER_ROAD_DIST_CALC_INTERVAL_MS;
-    if (doFullCalc) { riderLastRoadDistCalcTime = now; }
     for (var bonKey in riderMapMarkerRefs) {
         var ref = riderMapMarkerRefs[bonKey];
         if (ref.shopPos) {
-            if (doFullCalc) {
-                ref.distRiderShopText = (roadDistanceKm(pos.lat, pos.lng, ref.shopPos.lat, ref.shopPos.lng) || haversineKm(pos.lat, pos.lng, ref.shopPos.lat, ref.shopPos.lng)).toFixed(3) + ' كم';
-            } else {
-                ref.distRiderShopText = haversineKm(pos.lat, pos.lng, ref.shopPos.lat, ref.shopPos.lng).toFixed(3) + ' كم';
-            }
+            ref.distRiderShopText = haversineKm(pos.lat, pos.lng, ref.shopPos.lat, ref.shopPos.lng).toFixed(3) + ' كم';
             var ttDistEl = document.getElementById('tt-dist-' + bonKey + '-shop');
             if (ttDistEl) { ttDistEl.textContent = ref.distRiderShopText; } // تحديث خفيف بدون إعادة بناء الهنت كلها
             var chipEl = document.getElementById('dist-shop-' + bonKey);

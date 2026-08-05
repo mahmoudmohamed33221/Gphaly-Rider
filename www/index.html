@@ -177,6 +177,9 @@
         .oc-dist-row{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;margin:0 16px 10px;padding:10px 8px;border-radius:12px;background:var(--bg);border:1px solid var(--border);gap:2px;}
         .oc-dist-point{display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0;min-width:44px;}
         .oc-dist-point i{font-size:14px;color:var(--accent);}
+        .oc-dist-point i.fa-motorcycle{color:var(--danger);}
+        .oc-dist-point i.fa-store{color:#F97316;}
+        .oc-dist-point i.fa-house{color:var(--accent);}
         .oc-dist-point span{font-size:8.5px;font-weight:700;color:var(--muted);white-space:nowrap;}
         .oc-dist-val{flex:1;text-align:center;font-size:11px;font-weight:900;color:#fff;cursor:pointer;padding:4px 2px;}
         .oc-dist-val:active{opacity:.6;}
@@ -186,7 +189,7 @@
         .oc-time-lbl{display:block;font-size:9px;color:var(--dim);font-weight:600;}
         .oc-time-val{display:block;font-size:13px;font-weight:700;color:var(--fg);margin-top:3px;direction:ltr;}
 
-        .oc-info-box{position:relative;z-index:1;margin:0 16px 10px;padding:11px 12px;border-radius:12px;background:rgba(11,15,25,.6);border:1px solid var(--border);}
+        .oc-info-box{position:relative;z-index:1;margin:12px 16px 10px;padding:11px 12px;border-radius:12px;background:rgba(11,15,25,.6);border:1px solid var(--border);}
         .oc-info-top{display:flex;justify-content:space-between;align-items:center;gap:8px;}
         .oc-name-row{display:flex;align-items:center;gap:6px;min-width:0;flex:1;}
         .oc-name-row i{color:var(--accent);font-size:13px;width:16px;text-align:center;flex-shrink:0;}
@@ -1808,6 +1811,30 @@ function buildLocationButtonsHtml(o) {
     return html;
 }
 
+// 🆕 صندوق التفاصيل القابل للطي (مغلق: بيبين نوع/تصنيف المحل بس - مفتوح: اسم المحل، عنوانه، الأصناف، والملحوظة لو موجودة)
+// نفس التصميم مستخدم في كل مراحل الطلب (جديد، مقبول، تحضير، توصيل) عشان يبقى شكل موحّد
+function buildOrderDetailsBox(o, category) {
+    var parsed = parseOrderDetailsStructured(o.orderDetails);
+    var hasNotesX = !!(o.notes && o.notes !== 'لا توجد ملاحظات' && o.notes.trim());
+    if (!o.orderDetails && !hasNotesX) return '';
+    var itemLines = (parsed.items || '').split('\n').map(function (s) { return s.trim().replace(/^-+\s*/, ''); }).filter(function (s) { return s.length > 0; });
+    var itemsHtml = itemLines.length
+        ? itemLines.map(function (line) { return '<div class="oc-item-line">* ' + escHtml(line) + '</div>'; }).join('')
+        : (o.orderDetails ? '<div class="oc-item-line">* ' + escHtml(o.orderDetails) + '</div>' : '');
+    return '<div class="oc-details"><div class="oc-details-header" onclick="toggleDetails(' + o.bon + ')"><div class="oc-details-lbl"><i class="fa-solid fa-store"></i> <span class="oc-cat-name">' + escHtml(category || 'الطلب') + '</span></div><i class="fa-solid fa-chevron-down oc-details-arrow" id="arr-' + o.bon + '"></i></div><div class="oc-details-body" id="dtl-' + o.bon + '"><div class="oc-details-box">'
+        + (parsed.shopName ? '<div class="oc-detail-row"><i class="fa-solid fa-store" style="color:var(--accent);"></i><span><b>المحل المطلوب:-</b> ' + escHtml(parsed.shopName) + '</span></div>' : '')
+        + (parsed.shopAddress ? '<div class="oc-detail-row"><i class="fa-solid fa-location-dot" style="color:var(--danger);"></i><span><b>عنوان المحل:</b> ' + escHtml(parsed.shopAddress) + '</span></div>' : '')
+        + '<div class="oc-detail-sep"></div>'
+        + '<div class="oc-detail-row"><i class="fa-solid fa-basket-shopping" style="color:var(--accent);"></i><span><b>الطلب:-</b></span></div>'
+        + '<div class="oc-items-list">' + itemsHtml + '</div>'
+        + (hasNotesX
+            ? '<div class="oc-detail-sep"></div>'
+              + '<div class="oc-detail-row"><i class="fa-solid fa-comment-dots" style="color:#FBBF24;"></i><span><b>ملحوظة:-</b></span></div>'
+              + '<div class="oc-items-list"><div class="oc-item-line">* ' + escHtml(o.notes) + '</div></div>'
+            : '')
+        + '</div></div></div>';
+}
+
 function buildOrderCard(o) {
     var phase = getOrderPhase(o); var isNew = !knownBons.has(o.bon); var arriveClass = isNew ? ' arrive' : ''; var badgeHTML = ''; var headerIcon = 'fa-shopping-bag';
     if (phase === 'new') { badgeHTML = '<span class="oc-badge badge-glow">طلب جديد</span>'; } else if (phase === 'accepted') { badgeHTML = '<span class="oc-badge badge-acc">تم القبول</span>'; headerIcon = 'fa-receipt'; } else if (phase === 'preparing') { badgeHTML = '<span class="oc-badge badge-prep">جاري التحضير</span>'; headerIcon = 'fa-receipt'; } else if (phase === 'delivering') { badgeHTML = '<span class="oc-badge badge-deli">جاري التوصيل</span>'; headerIcon = 'fa-receipt'; }
@@ -1820,27 +1847,8 @@ function buildOrderCard(o) {
         html += '</div>';
     }
     if (phase === 'new') {
-        var parsed = parseOrderDetailsStructured(o.orderDetails);
         var dist = computeOrderDistances(o);
-        var hasNotesNew = !!(o.notes && o.notes !== 'لا توجد ملاحظات' && o.notes.trim());
-        if (o.orderDetails || hasNotesNew) {
-            var itemLines = (parsed.items || '').split('\n').map(function (s) { return s.trim().replace(/^-+\s*/, ''); }).filter(function (s) { return s.length > 0; });
-            var itemsHtml = itemLines.length
-                ? itemLines.map(function (line) { return '<div class="oc-item-line">* ' + escHtml(line) + '</div>'; }).join('')
-                : (o.orderDetails ? '<div class="oc-item-line">* ' + escHtml(o.orderDetails) + '</div>' : '');
-            html += '<div class="oc-details"><div class="oc-details-header" onclick="toggleDetails(' + o.bon + ')"><div class="oc-details-lbl"><i class="fa-solid fa-store"></i> <span class="oc-cat-name">' + escHtml(category || 'الطلب') + '</span></div><i class="fa-solid fa-chevron-down oc-details-arrow" id="arr-' + o.bon + '"></i></div><div class="oc-details-body" id="dtl-' + o.bon + '"><div class="oc-details-box">'
-                + (parsed.shopName ? '<div class="oc-detail-row"><i class="fa-solid fa-store" style="color:var(--accent);"></i><span><b>المحل المطلوب:-</b> ' + escHtml(parsed.shopName) + '</span></div>' : '')
-                + (parsed.shopAddress ? '<div class="oc-detail-row"><i class="fa-solid fa-location-dot" style="color:var(--danger);"></i><span><b>عنوان المحل:</b> ' + escHtml(parsed.shopAddress) + '</span></div>' : '')
-                + '<div class="oc-detail-sep"></div>'
-                + '<div class="oc-detail-row"><i class="fa-solid fa-basket-shopping" style="color:var(--accent);"></i><span><b>الطلب:-</b></span></div>'
-                + '<div class="oc-items-list">' + itemsHtml + '</div>'
-                + (hasNotesNew
-                    ? '<div class="oc-detail-sep"></div>'
-                      + '<div class="oc-detail-row"><i class="fa-solid fa-comment-dots" style="color:#FBBF24;"></i><span><b>ملحوظة:-</b></span></div>'
-                      + '<div class="oc-items-list"><div class="oc-item-line">* ' + escHtml(o.notes) + '</div></div>'
-                    : '')
-                + '</div></div></div>';
-        }
+        html += buildOrderDetailsBox(o, category);
         html += '<div class="oc-dist-row">'
             + '<div class="oc-dist-point"><i class="fa-solid fa-motorcycle"></i><span>موقعك</span></div>'
             + '<div class="oc-dist-val"' + (dist.shopPos ? ' onclick="event.stopPropagation();openRouteChoice(' + dist.shopPos.lat + ',' + dist.shopPos.lng + ',\'موقع المحل - بون ' + o.bon + '\',\'' + o.bon + '\',\'shop\')"' : '') + '><span id="ocdist-shop-' + o.bon + '">' + (dist.distRiderShop || '—') + '</span></div>'
@@ -1851,9 +1859,7 @@ function buildOrderCard(o) {
         html += '<div class="oc-time-grid"><div class="oc-time-item"><span class="oc-time-lbl">اليوم</span><span class="oc-time-val" style="direction:rtl;">' + (o.orderDayDate || '---') + '</span></div><div class="oc-time-item"><span class="oc-time-lbl">الساعة</span><span class="oc-time-val">' + (o.orderTime || '---') + '</span></div><div class="oc-time-item"><span class="oc-time-lbl">التأخير</span><span class="oc-time-val" data-delay-ts="' + orderTS + '" style="direction:rtl;color:' + delayResult.color + ';font-weight:900;">' + delayResult.text + '</span></div></div>';
         html += '<div class="oc-actions"><button class="act-btn pri" onclick="acceptOrderLocally(' + o.bon + ')"><i class="fa-solid fa-check-circle"></i> قبول الطلب</button></div>';
     } else {
-        html += buildLocationButtonsHtml(o);
-        if (o.orderDetails) { html += '<div class="oc-contents"><span class="oc-contents-label"><i class="fa-solid fa-list"></i> محتويات الأوردر:</span><div class="oc-contents-box">' + escHtml(o.orderDetails) + '</div></div>'; }
-        if (o.notes && o.notes !== 'لا توجد ملاحظات') { html += '<div class="oc-notes"><i class="fa-solid fa-comment-dots"></i><span><b>ملحوظة:</b> ' + escHtml(o.notes) + '</span></div>'; }
+        html += buildOrderDetailsBox(o, category);
         var acceptTS = acceptedAtTimes[o.bon] || 0; var acceptDelayResult = acceptTS ? formatDelay(Date.now() - acceptTS) : { text: 'لم يبدأ', color: '#6B7280' }; var beforeAcceptDelay = (acceptTS && orderTS) ? formatDelay(acceptTS - orderTS) : { text: '---', color: 'var(--dim)' };
         html += '<div class="oc-delay-grid"><div class="oc-delay-item"><span class="oc-delay-lbl amber">قبل القبول</span><span class="oc-delay-val amber" style="color:' + beforeAcceptDelay.color + ';">' + beforeAcceptDelay.text + '</span></div><div class="oc-delay-item"><span class="oc-delay-lbl blue">بعد القبول</span><span class="oc-delay-val blue" data-accept-delay-ts="' + acceptTS + '" style="color:' + acceptDelayResult.color + ';">' + acceptDelayResult.text + '</span></div></div>';
         var actions = '';

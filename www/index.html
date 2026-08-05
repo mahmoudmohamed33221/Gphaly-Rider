@@ -1899,8 +1899,54 @@ async function ensureNativeLocationPermission() {
 
 function getActiveOrdersForMap() {
     var list = [];
-    for (var i = 0; i < allOrders.length; i++) { var phase = getOrderPhase(allOrders[i]); if (phase === 'new' || phase === 'accepted' || phase === 'preparing' || phase === 'delivering') list.push(allOrders[i]); }
+    for (var i = 0; i < allOrders.length; i++) { var phase = getOrderPhase(allOrders[i]); if (phase === 'accepted' || phase === 'preparing' || phase === 'delivering') list.push(allOrders[i]); }
     return list;
+}
+
+// 🆕 طلب "جديد" لسه ماتقبلش: بيظهر على الخريطة بدبوس مؤقت بس وهو في وضع "اتجه نحو الموقع"،
+// وبيتشال تمامًا لما نرجع للوضع الطبيعي (clearMapFocus) - عشان الطلبات الغير مقبولة متفضلش ظاهرة دايمًا على الخريطة
+function ensurePendingOrderMarkers(bonKey) {
+    if (riderMapMarkerRefs[bonKey]) return; // موجود بالفعل (يبقى مقبول أصلاً وجزء من العرض العادي)
+    var order = null;
+    for (var i = 0; i < allOrders.length; i++) { if (String(allOrders[i].bon) === String(bonKey)) { order = allOrders[i]; break; } }
+    if (!order || !riderMapMarkersLayer) return;
+    var custPos = parseLatLngFromLocationString(order.customerLocation);
+    var shopPos = parseLatLngFromLocationString(order.storeLocation);
+    var shopName = parseShopNameFromNotes(order.orderDetails, order.notes);
+    var color = '#FBBF24';
+    riderMapMarkerRefs[bonKey] = {
+        cust: null, shop: null, custPos: custPos, shopPos: shopPos,
+        color: { cust: color, shop: color },
+        custMeta: { name: order.name, sub: order.landmark || '—' },
+        shopMeta: { name: order.name, sub: shopName || 'المحل' },
+        distShopCustText: (custPos && shopPos) ? haversineKm(shopPos.lat, shopPos.lng, custPos.lat, custPos.lng).toFixed(3) + ' كم' : null,
+        distRiderShopText: (riderLiveMarker && shopPos) ? haversineKm(riderLiveMarker.getLatLng().lat, riderLiveMarker.getLatLng().lng, shopPos.lat, shopPos.lng).toFixed(3) + ' كم' : null,
+        pending: true, phase: 'new'
+    };
+    if (custPos) {
+        var m1 = L.marker([custPos.lat, custPos.lng], { icon: buildRiderPinIcon(color, 'fa-user') }).addTo(riderMapMarkersLayer);
+        m1.bindTooltip(buildTooltipCardHtml(bonKey, 'cust'), { permanent: true, direction: 'top', offset: [0, -14], className: 'rdr-tooltip' });
+        m1.on('click', (function (bk) { return function () { onOrderMarkerClick(bk, 'cust'); }; })(bonKey));
+        riderMapMarkerRefs[bonKey].cust = m1;
+    }
+    if (shopPos) {
+        var m2 = L.marker([shopPos.lat, shopPos.lng], { icon: buildRiderPinIcon(color, 'fa-store') }).addTo(riderMapMarkersLayer);
+        m2.bindTooltip(buildTooltipCardHtml(bonKey, 'shop'), { permanent: true, direction: 'top', offset: [0, -14], className: 'rdr-tooltip' });
+        m2.on('click', (function (bk) { return function () { onOrderMarkerClick(bk, 'shop'); }; })(bonKey));
+        riderMapMarkerRefs[bonKey].shop = m2;
+    }
+}
+
+// 🆕 بيشيل أي دبابيس مؤقتة لطلبات لسه ماتقبلش (اللي اتحطت بس عشان وضع "اتجه نحو الموقع" وقت ما كانت مركّزة)
+function removePendingOrderMarkers() {
+    for (var bonKey in riderMapMarkerRefs) {
+        var ref = riderMapMarkerRefs[bonKey];
+        if (ref && ref.pending) {
+            if (ref.cust && riderMapMarkersLayer) riderMapMarkersLayer.removeLayer(ref.cust);
+            if (ref.shop && riderMapMarkersLayer) riderMapMarkersLayer.removeLayer(ref.shop);
+            delete riderMapMarkerRefs[bonKey];
+        }
+    }
 }
 
 // 🆕 استخراج اسم المحل من نص الملاحظات (لو موجود بالصيغة "المحل المطلوب: اسم")
@@ -1964,13 +2010,13 @@ function confirmRouteChoice(mode) {
                 tries++;
                 if (riderLiveMarker) {
                     clearInterval(waitForLive);
-                    if (t.bonKey && t.role) { riderMapFocusedBon = t.bonKey; riderMapActiveRouteMarker = { bonKey: t.bonKey, role: t.role }; applyMapFocusVisuals(); refreshAllTooltipContents(); }
+                    if (t.bonKey && t.role) { ensurePendingOrderMarkers(t.bonKey); riderMapFocusedBon = t.bonKey; riderMapActiveRouteMarker = { bonKey: t.bonKey, role: t.role }; applyMapFocusVisuals(); refreshAllTooltipContents(); }
                     startRiderRoute(t.lat, t.lng, t.label);
                 }
                 else if (tries > 40) { clearInterval(waitForLive); }
             }, 500);
         } else {
-            if (t.bonKey && t.role) { riderMapFocusedBon = t.bonKey; riderMapActiveRouteMarker = { bonKey: t.bonKey, role: t.role }; applyMapFocusVisuals(); refreshAllTooltipContents(); }
+            if (t.bonKey && t.role) { ensurePendingOrderMarkers(t.bonKey); riderMapFocusedBon = t.bonKey; riderMapActiveRouteMarker = { bonKey: t.bonKey, role: t.role }; applyMapFocusVisuals(); refreshAllTooltipContents(); }
             startRiderRoute(t.lat, t.lng, t.label);
         }
     } else if (mode === 'gmaps') {
@@ -2131,14 +2177,20 @@ function updateRiderMapMarkers() {
         var custPos = parseLatLngFromLocationString(o.customerLocation);
         var shopPos = parseLatLngFromLocationString(o.storeLocation);
         var shopName = parseShopNameFromNotes(o.orderDetails, o.notes);
-        var shopCustKm = (custPos && shopPos) ? haversineKm(shopPos.lat, shopPos.lng, custPos.lat, custPos.lng).toFixed(3) + ' كم' : null;
+        var orderPhase = getOrderPhase(o);
+        // 🆕 لما الطلب يكون "جاري التوصيل"، رقم مسافة العميل بيبقى مسافة حية من مكان الطيار الحالي للعميل (بتقل لحد ما توصل صفر)،
+        // مش مسافة ثابتة من المحل للعميل زي باقي المراحل
+        var shopCustKm = (orderPhase === 'delivering' && riderLiveMarker && custPos)
+            ? haversineKm(riderLiveMarker.getLatLng().lat, riderLiveMarker.getLatLng().lng, custPos.lat, custPos.lng).toFixed(3) + ' كم'
+            : (custPos && shopPos) ? haversineKm(shopPos.lat, shopPos.lng, custPos.lat, custPos.lng).toFixed(3) + ' كم' : null;
         var riderShopKm = (riderLiveMarker && shopPos) ? haversineKm(riderLiveMarker.getLatLng().lat, riderLiveMarker.getLatLng().lng, shopPos.lat, shopPos.lng).toFixed(3) + ' كم' : null;
         riderMapMarkerRefs[bonKey] = {
             cust: null, shop: null, custPos: custPos, shopPos: shopPos,
             color: { cust: color, shop: color },
             custMeta: { name: o.name, sub: o.landmark || '—' },
             shopMeta: { name: o.name, sub: shopName || 'المحل' },
-            distShopCustText: shopCustKm, distRiderShopText: riderShopKm
+            distShopCustText: shopCustKm, distRiderShopText: riderShopKm,
+            phase: orderPhase
         };
         if (custPos) {
             var m1 = L.marker([custPos.lat, custPos.lng], { icon: buildRiderPinIcon(color, 'fa-user') }).addTo(riderMapMarkersLayer);
@@ -2161,7 +2213,7 @@ function updateRiderMapMarkers() {
                 + '<div class="rdr-lg-name"><i class="fa-solid fa-user"></i>' + escHtml(o.name || '') + '</div>'
                 + '<div class="rdr-lg-shop"><i class="fa-solid fa-store"></i>' + escHtml(shopName || 'المحل') + '</div>'
                 + '<div class="rdr-lg-dist"><i class="fa-solid fa-motorcycle"></i><i class="fa-solid fa-chevron-left rdr-lg-arrow"></i><i class="fa-solid fa-store"></i><span id="dist-shop-' + bonKey + '">' + (riderShopKm || '—') + '</span></div>'
-                + '<div class="rdr-lg-dist"><i class="fa-solid fa-store"></i><i class="fa-solid fa-chevron-left rdr-lg-arrow"></i><i class="fa-solid fa-house"></i>' + (shopCustKm || '—') + '</div>'
+                + '<div class="rdr-lg-dist"><i class="fa-solid fa-store"></i><i class="fa-solid fa-chevron-left rdr-lg-arrow"></i><i class="fa-solid fa-house"></i><span id="dist-cust-' + bonKey + '">' + (shopCustKm || '—') + '</span></div>'
                 + '</div>';
         }
     }
@@ -2173,6 +2225,8 @@ function updateRiderMapMarkers() {
     } else if (riderLiveMarker) {
         riderMapInstance.setView(riderLiveMarker.getLatLng(), 15);
     }
+    // 🆕 لو كان فيه دبوس مؤقت لطلب لسه ماتقبلش شغال في وضع "اتجه نحو الموقع" وقت ما البيانات اتحدثت، نرجّعه تاني
+    if (riderMapActiveRouteMarker && !riderMapMarkerRefs[riderMapActiveRouteMarker.bonKey]) { ensurePendingOrderMarkers(riderMapActiveRouteMarker.bonKey); }
     applyMapFocusVisuals();
 }
 
@@ -2185,7 +2239,7 @@ function updateRiderDistancesLive(posOverride) {
     var pos = posOverride || riderLiveMarker.getLatLng();
     for (var bonKey in riderMapMarkerRefs) {
         var ref = riderMapMarkerRefs[bonKey];
-        if (ref.shopPos) {
+        if (ref.shopPos && ref.phase !== 'delivering') {
             var isRoutingHere = riderRouteLayer && riderMapActiveRouteMarker && riderMapActiveRouteMarker.bonKey === bonKey && riderMapActiveRouteMarker.role === 'shop';
             if (!isRoutingHere && !ref.hasRealDist) {
                 ref.distRiderShopText = haversineKm(pos.lat, pos.lng, ref.shopPos.lat, ref.shopPos.lng).toFixed(3) + ' كم'; // تقريب سريع لحد ما يوصل أول رقم حقيقي
@@ -2195,6 +2249,18 @@ function updateRiderDistancesLive(posOverride) {
             var chipEl = document.getElementById('dist-shop-' + bonKey);
             if (chipEl) chipEl.textContent = ref.distRiderShopText;
             if (!isRoutingHere) { refreshRealShopDistance(bonKey); } // بيحاول يجيب رقم حقيقي في الخلفية (بمعدل محدود جوه الدالة)
+        }
+        // 🆕 لما الطلب يبقى "جاري التوصيل" (اتاخد من المحل)، بقية العداد بقى بيقل من مكان الطيار الحالي للعميل لحد ما يوصل صفر
+        if (ref.custPos && ref.phase === 'delivering') {
+            var isRoutingToCust = riderRouteLayer && riderMapActiveRouteMarker && riderMapActiveRouteMarker.bonKey === bonKey && riderMapActiveRouteMarker.role === 'cust';
+            if (!isRoutingToCust && !ref.hasRealCustDist) {
+                ref.distShopCustText = haversineKm(pos.lat, pos.lng, ref.custPos.lat, ref.custPos.lng).toFixed(3) + ' كم';
+            }
+            var ttCustEl = document.getElementById('tt-dist-' + bonKey + '-cust');
+            if (ttCustEl) { ttCustEl.textContent = ref.distShopCustText; }
+            var custChipEl = document.getElementById('dist-cust-' + bonKey);
+            if (custChipEl) custChipEl.textContent = ref.distShopCustText;
+            if (!isRoutingToCust) { refreshRealCustDistance(bonKey); }
         }
     }
 }
@@ -2220,6 +2286,7 @@ function clearMapFocus() {
     riderMapFocusedBon = null;
     riderMapActiveRouteMarker = null;
     clearRiderRoute();
+    removePendingOrderMarkers(); // 🆕 أي طلب لسه ماتقبلش كان ظاهر مؤقتًا وقت المسار، يتشال تمامًا لما نرجع للوضع الطبيعي
     applyMapFocusVisuals();
     refreshAllTooltipContents();
 }
@@ -2282,6 +2349,33 @@ async function refreshRealShopDistance(bonKey) {
                 if (chipEl) { chipEl.textContent = ref.distRiderShopText; }
                 var ttEl = document.getElementById('tt-dist-' + bonKey + '-shop');
                 if (ttEl) { ttEl.textContent = ref.distRiderShopText; }
+            }
+        }
+    } catch (e) { /* لو فشل، هنفضل شغالين بآخر قيمة معروضة */ }
+}
+
+// 🆕 نفس فكرة refreshRealShopDistance، بس للمسافة الحقيقية من الطيار للعميل وقت مرحلة "جاري التوصيل"
+var riderBgCustDistanceLastCalc = {};
+
+async function refreshRealCustDistance(bonKey) {
+    var ref = riderMapMarkerRefs[bonKey];
+    if (!ref || !ref.custPos || !riderLiveMarker || ref.phase !== 'delivering') return;
+    var now = Date.now();
+    if (riderBgCustDistanceLastCalc[bonKey] && (now - riderBgCustDistanceLastCalc[bonKey]) < RIDER_BG_DISTANCE_INTERVAL_MS) return;
+    riderBgCustDistanceLastCalc[bonKey] = now;
+    try {
+        var from = riderLiveMarker.getLatLng();
+        var data = await fetchOsrmRoute(from, ref.custPos.lat, ref.custPos.lng, 1);
+        if (data && data.routes && data.routes[0]) {
+            var isActivelyRoutingHere = riderRouteLayer && riderMapActiveRouteMarker && riderMapActiveRouteMarker.bonKey === bonKey && riderMapActiveRouteMarker.role === 'cust';
+            if (!isActivelyRoutingHere) {
+                var km = (data.routes[0].distance / 1000).toFixed(3);
+                ref.distShopCustText = km + ' كم';
+                ref.hasRealCustDist = true;
+                var chipEl = document.getElementById('dist-cust-' + bonKey);
+                if (chipEl) { chipEl.textContent = ref.distShopCustText; }
+                var ttEl = document.getElementById('tt-dist-' + bonKey + '-cust');
+                if (ttEl) { ttEl.textContent = ref.distShopCustText; }
             }
         }
     } catch (e) { /* لو فشل، هنفضل شغالين بآخر قيمة معروضة */ }
@@ -2352,6 +2446,17 @@ async function startRiderRoute(destLat, destLng, label) {
                 if (syncChipEl) { syncChipEl.textContent = syncRef.distRiderShopText; }
                 var syncTtEl = document.getElementById('tt-dist-' + syncBonKey + '-shop');
                 if (syncTtEl) { syncTtEl.textContent = syncRef.distRiderShopText; }
+            }
+        } else if (riderMapActiveRouteMarker && riderMapActiveRouteMarker.role === 'cust') {
+            // 🆕 نفس فكرة تزامن مسافة المحل، بس هنا لمسافة العميل وقت ما المسار شغال ورايح ليه فعليًا
+            var syncCustBonKey = riderMapActiveRouteMarker.bonKey;
+            var syncCustRef = riderMapMarkerRefs[syncCustBonKey];
+            if (syncCustRef) {
+                syncCustRef.distShopCustText = km + ' كم';
+                var syncCustChipEl = document.getElementById('dist-cust-' + syncCustBonKey);
+                if (syncCustChipEl) { syncCustChipEl.textContent = syncCustRef.distShopCustText; }
+                var syncCustTtEl = document.getElementById('tt-dist-' + syncCustBonKey + '-cust');
+                if (syncCustTtEl) { syncCustTtEl.textContent = syncCustRef.distShopCustText; }
             }
         }
     } catch (e) {

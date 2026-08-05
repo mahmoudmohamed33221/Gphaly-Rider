@@ -200,7 +200,7 @@
         .oc-addr-text strong{font-weight:700;}
         .oc-landmark{color:var(--accent);font-weight:600;font-size:11px;display:block;margin-top:3px;opacity:.85;}
 
-        .oc-details{position:relative;z-index:1;margin:0 16px 10px;border-radius:10px;background:var(--bg);border:1px solid var(--border);overflow:hidden;}
+        .oc-details{position:relative;z-index:1;margin:12px 16px 10px;border-radius:10px;background:var(--bg);border:1px solid var(--border);overflow:hidden;}
         .oc-details-header{display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding:9px 12px;transition:background .2s;user-select:none;-webkit-user-select:none;}
         .oc-details-header:active{background:rgba(0,230,118,.05);}
         .oc-details-lbl{font-size:11px;color:var(--accent);font-weight:700;display:flex;align-items:center;gap:5px;}
@@ -208,8 +208,14 @@
         .oc-details-arrow{color:var(--accent);font-size:11px;transition:transform .3s ease;opacity:.7;}
         .oc-details-arrow.open{transform:rotate(180deg);opacity:1;}
         .oc-details-body{max-height:0;overflow:hidden;transition:max-height .4s ease, opacity .3s ease;opacity:0;}
-        .oc-details-body.open{max-height:300px;opacity:1;}
-        .oc-details-box{padding:0 12px 12px;border-top:1px solid var(--border-subtle);margin-top:2px;padding-top:8px;font-size:12px;color:#E5E7EB;white-space:pre-line;line-height:1.9;max-height:120px;overflow-y:auto;font-weight:500;}
+        .oc-details-body.open{max-height:420px;opacity:1;}
+        .oc-details-box{padding:0 12px 12px;border-top:1px solid var(--border-subtle);margin-top:2px;padding-top:10px;font-size:12px;color:#E5E7EB;white-space:pre-line;line-height:1.9;max-height:340px;overflow-y:auto;font-weight:500;}
+        .oc-detail-row{display:flex;align-items:flex-start;gap:7px;margin-bottom:6px;}
+        .oc-detail-row i{font-size:12px;margin-top:3px;flex-shrink:0;width:14px;text-align:center;}
+        .oc-detail-row b{color:var(--fg);font-weight:800;}
+        .oc-detail-sep{height:1px;background:var(--border-subtle);margin:10px 0;}
+        .oc-items-list{padding-right:2px;}
+        .oc-item-line{font-size:12px;color:#E5E7EB;line-height:1.8;margin-bottom:3px;padding-right:4px;}
 
 
         .oc-contents{position:relative;z-index:1;margin:0 16px 10px;}
@@ -1816,16 +1822,24 @@ function buildOrderCard(o) {
     if (phase === 'new') {
         var parsed = parseOrderDetailsStructured(o.orderDetails);
         var dist = computeOrderDistances(o);
-        if (o.orderDetails) {
+        var hasNotesNew = !!(o.notes && o.notes !== 'لا توجد ملاحظات' && o.notes.trim());
+        if (o.orderDetails || hasNotesNew) {
+            var itemLines = (parsed.items || '').split('\n').map(function (s) { return s.trim().replace(/^-+\s*/, ''); }).filter(function (s) { return s.length > 0; });
+            var itemsHtml = itemLines.length
+                ? itemLines.map(function (line) { return '<div class="oc-item-line">* ' + escHtml(line) + '</div>'; }).join('')
+                : (o.orderDetails ? '<div class="oc-item-line">* ' + escHtml(o.orderDetails) + '</div>' : '');
             html += '<div class="oc-details"><div class="oc-details-header" onclick="toggleDetails(' + o.bon + ')"><div class="oc-details-lbl"><i class="fa-solid fa-store"></i> <span class="oc-cat-name">' + escHtml(category || 'الطلب') + '</span></div><i class="fa-solid fa-chevron-down oc-details-arrow" id="arr-' + o.bon + '"></i></div><div class="oc-details-body" id="dtl-' + o.bon + '"><div class="oc-details-box">'
-                + (parsed.shopName ? '<b><i class="fa-solid fa-store" style="color:var(--accent);margin-left:4px;"></i>المحل المطلوب:-</b> ' + escHtml(parsed.shopName) + '<br>' : '')
-                + (parsed.shopAddress ? '<b><i class="fa-solid fa-location-dot" style="color:var(--danger);margin-left:4px;"></i>عنوان المحل:</b> ' + escHtml(parsed.shopAddress) + '<br>' : '')
-                + '----------------------<br>'
-                + escHtml(parsed.items || o.orderDetails)
+                + (parsed.shopName ? '<div class="oc-detail-row"><i class="fa-solid fa-store" style="color:var(--accent);"></i><span><b>المحل المطلوب:-</b> ' + escHtml(parsed.shopName) + '</span></div>' : '')
+                + (parsed.shopAddress ? '<div class="oc-detail-row"><i class="fa-solid fa-location-dot" style="color:var(--danger);"></i><span><b>عنوان المحل:</b> ' + escHtml(parsed.shopAddress) + '</span></div>' : '')
+                + '<div class="oc-detail-sep"></div>'
+                + '<div class="oc-detail-row"><i class="fa-solid fa-basket-shopping" style="color:var(--accent);"></i><span><b>الطلب:-</b></span></div>'
+                + '<div class="oc-items-list">' + itemsHtml + '</div>'
+                + (hasNotesNew
+                    ? '<div class="oc-detail-sep"></div>'
+                      + '<div class="oc-detail-row"><i class="fa-solid fa-comment-dots" style="color:#FBBF24;"></i><span><b>ملحوظة:-</b></span></div>'
+                      + '<div class="oc-items-list"><div class="oc-item-line">* ' + escHtml(o.notes) + '</div></div>'
+                    : '')
                 + '</div></div></div>';
-        }
-        if (o.notes && o.notes !== 'لا توجد ملاحظات' && o.notes.trim()) {
-            html += '<div class="oc-details oc-notes-collapse"><div class="oc-details-header" onclick="toggleNotes(' + o.bon + ')"><div class="oc-details-lbl"><i class="fa-solid fa-comment-dots"></i> <span class="oc-cat-name">ملحوظة</span></div><i class="fa-solid fa-chevron-down oc-details-arrow" id="narr-' + o.bon + '"></i></div><div class="oc-details-body" id="ndtl-' + o.bon + '"><div class="oc-details-box">' + escHtml(o.notes) + '</div></div></div>';
         }
         html += '<div class="oc-dist-row">'
             + '<div class="oc-dist-point"><i class="fa-solid fa-motorcycle"></i><span>موقعك</span></div>'
@@ -1885,7 +1899,7 @@ async function ensureNativeLocationPermission() {
 
 function getActiveOrdersForMap() {
     var list = [];
-    for (var i = 0; i < allOrders.length; i++) { var phase = getOrderPhase(allOrders[i]); if (phase === 'accepted' || phase === 'preparing' || phase === 'delivering') list.push(allOrders[i]); }
+    for (var i = 0; i < allOrders.length; i++) { var phase = getOrderPhase(allOrders[i]); if (phase === 'new' || phase === 'accepted' || phase === 'preparing' || phase === 'delivering') list.push(allOrders[i]); }
     return list;
 }
 

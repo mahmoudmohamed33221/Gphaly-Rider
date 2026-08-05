@@ -2130,7 +2130,9 @@ function updateRiderDistancesLive(posOverride) {
     for (var bonKey in riderMapMarkerRefs) {
         var ref = riderMapMarkerRefs[bonKey];
         if (ref.shopPos) {
-            ref.distRiderShopText = haversineKm(pos.lat, pos.lng, ref.shopPos.lat, ref.shopPos.lng).toFixed(3) + ' كم';
+            // 🆕 لو فيه مسار حقيقي شغال دلوقتي لنفس الدبوس ده، سيبه على رقمه الدقيق ومتحدثوش بالتقريبي
+            var isRoutingHere = riderRouteLayer && riderMapActiveRouteMarker && riderMapActiveRouteMarker.bonKey === bonKey && riderMapActiveRouteMarker.role === 'shop';
+            if (!isRoutingHere) { ref.distRiderShopText = haversineKm(pos.lat, pos.lng, ref.shopPos.lat, ref.shopPos.lng).toFixed(3) + ' كم'; }
             var ttDistEl = document.getElementById('tt-dist-' + bonKey + '-shop');
             if (ttDistEl) { ttDistEl.textContent = ref.distRiderShopText; } // تحديث خفيف بدون إعادة بناء الهنت كلها
             var chipEl = document.getElementById('dist-shop-' + bonKey);
@@ -2254,6 +2256,18 @@ async function startRiderRoute(destLat, destLng, label) {
         var km = (data.routes[0].distance / 1000).toFixed(3);
         var mins = Math.round(data.routes[0].duration / 60);
         if (infoText) infoText.innerHTML = '<i class="fa-solid fa-route" style="margin-left:5px;"></i>' + escHtml(label) + ' — ' + km + ' كم — تقريبًا ' + mins + ' دقيقة';
+        // 🆕 لما يكون المسار رايح للمحل، نخلي رقم المسافة في الكارت فوق والهنت يتزامنوا مع نفس الرقم الحقيقي ده، عشان منعرضش رقمين مختلفين لنفس الحاجة
+        if (riderMapActiveRouteMarker && riderMapActiveRouteMarker.role === 'shop') {
+            var syncBonKey = riderMapActiveRouteMarker.bonKey;
+            var syncRef = riderMapMarkerRefs[syncBonKey];
+            if (syncRef) {
+                syncRef.distRiderShopText = km + ' كم';
+                var syncChipEl = document.getElementById('dist-shop-' + syncBonKey);
+                if (syncChipEl) { syncChipEl.textContent = syncRef.distRiderShopText; }
+                var syncTtEl = document.getElementById('tt-dist-' + syncBonKey + '-shop');
+                if (syncTtEl) { syncTtEl.textContent = syncRef.distRiderShopText; }
+            }
+        }
     } catch (e) {
         var gmapsUrl = 'https://www.google.com/maps/dir/?api=1&origin=' + from.lat + ',' + from.lng + '&destination=' + destLat + ',' + destLng + '&travelmode=driving';
         if (infoText) infoText.innerHTML = 'تعذر حساب المسار دلوقتي، جرب تاني — أو <a href="' + gmapsUrl + '" target="_blank" style="color:var(--accent);font-weight:800;text-decoration:underline;pointer-events:auto;">افتح في جوجل ماب</a>';

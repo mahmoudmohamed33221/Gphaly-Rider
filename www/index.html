@@ -2130,13 +2130,15 @@ function updateRiderDistancesLive(posOverride) {
     for (var bonKey in riderMapMarkerRefs) {
         var ref = riderMapMarkerRefs[bonKey];
         if (ref.shopPos) {
-            // 🆕 لو فيه مسار حقيقي شغال دلوقتي لنفس الدبوس ده، سيبه على رقمه الدقيق ومتحدثوش بالتقريبي
             var isRoutingHere = riderRouteLayer && riderMapActiveRouteMarker && riderMapActiveRouteMarker.bonKey === bonKey && riderMapActiveRouteMarker.role === 'shop';
-            if (!isRoutingHere) { ref.distRiderShopText = haversineKm(pos.lat, pos.lng, ref.shopPos.lat, ref.shopPos.lng).toFixed(3) + ' كم'; }
+            if (!isRoutingHere && !ref.hasRealDist) {
+                ref.distRiderShopText = haversineKm(pos.lat, pos.lng, ref.shopPos.lat, ref.shopPos.lng).toFixed(3) + ' كم'; // تقريب سريع لحد ما يوصل أول رقم حقيقي
+            }
             var ttDistEl = document.getElementById('tt-dist-' + bonKey + '-shop');
             if (ttDistEl) { ttDistEl.textContent = ref.distRiderShopText; } // تحديث خفيف بدون إعادة بناء الهنت كلها
             var chipEl = document.getElementById('dist-shop-' + bonKey);
             if (chipEl) chipEl.textContent = ref.distRiderShopText;
+            if (!isRoutingHere) { refreshRealShopDistance(bonKey); } // بيحاول يجيب رقم حقيقي في الخلفية (بمعدل محدود جوه الدالة)
         }
     }
 }
@@ -2201,6 +2203,34 @@ function applyMapFocusVisuals() {
 }
 
 // 🆕 رسم مسار (اتجاهات) من مكان الطيار الحالي لأي نقطة (عميل أو محل)
+// 🆕 بيجيب المسافة الحقيقية على الشوارع للمحل في الخلفية (بدون رسم مسار)، بمعدل محدود عشان منحملش سيرفر الخرائط
+var riderBgDistanceLastCalc = {}; // { bonKey: timestamp }
+var RIDER_BG_DISTANCE_INTERVAL_MS = 8000;
+
+async function refreshRealShopDistance(bonKey) {
+    var ref = riderMapMarkerRefs[bonKey];
+    if (!ref || !ref.shopPos || !riderLiveMarker) return;
+    var now = Date.now();
+    if (riderBgDistanceLastCalc[bonKey] && (now - riderBgDistanceLastCalc[bonKey]) < RIDER_BG_DISTANCE_INTERVAL_MS) return;
+    riderBgDistanceLastCalc[bonKey] = now;
+    try {
+        var from = riderLiveMarker.getLatLng();
+        var data = await fetchOsrmRoute(from, ref.shopPos.lat, ref.shopPos.lng, 1); // بدون محاولة إعادة تلقائية عشان منزودش الحمل
+        if (data && data.routes && data.routes[0]) {
+            var isActivelyRoutingHere = riderRouteLayer && riderMapActiveRouteMarker && riderMapActiveRouteMarker.bonKey === bonKey && riderMapActiveRouteMarker.role === 'shop';
+            if (!isActivelyRoutingHere) { // منلخبطش القيمة لو فيه مسار حقيقي شغال دلوقتي بيتزامن بنفسه أصلًا
+                var km = (data.routes[0].distance / 1000).toFixed(3);
+                ref.distRiderShopText = km + ' كم';
+                ref.hasRealDist = true;
+                var chipEl = document.getElementById('dist-shop-' + bonKey);
+                if (chipEl) { chipEl.textContent = ref.distRiderShopText; }
+                var ttEl = document.getElementById('tt-dist-' + bonKey + '-shop');
+                if (ttEl) { ttEl.textContent = ref.distRiderShopText; }
+            }
+        }
+    } catch (e) { /* لو فشل، هنفضل شغالين بآخر قيمة معروضة */ }
+}
+
 async function fetchOsrmRoute(from, destLat, destLng, attempt) {
     var url = 'https://router.project-osrm.org/route/v1/driving/' + from.lng + ',' + from.lat + ';' + destLng + ',' + destLat + '?overview=full&geometries=geojson';
     var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;

@@ -547,9 +547,23 @@
         .typing-dots span:nth-child(2){animation-delay:.15s;}
         .typing-dots span:nth-child(3){animation-delay:.3s;}
         @keyframes typingBounceRider{0%,60%,100%{transform:translateY(0);opacity:.4;}30%{transform:translateY(-4px);opacity:1;}}
+
+        /* 🆕 بوابة الأذونات الإجبارية (GPS / الموقع) - نفس تصميم جبهالي ماركت بالظبط، بس بألوان تطبيق الطيار */
+        #mandatory-gate { position: fixed; inset: 0; background: #000000; z-index: 9999; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 2rem 1.5rem; }
+        #mandatory-gate.show { display: flex; }
+        .mg-icon { font-size: 3.2rem; color: var(--accent); margin-bottom: 1.1rem; }
+        .mg-icon.is-error { color: var(--danger); }
+        .mg-title { color: var(--fg); font-weight: 800; font-size: 1.15rem; margin-bottom: 0.6rem; }
+        .mg-text { color: var(--muted); font-size: 0.85rem; line-height: 1.7; max-width: 340px; margin-bottom: 1.6rem; }
+        .mg-btn { background: var(--accent); color: #06210F; font-weight: 800; padding: 0.9rem 2.2rem; border-radius: 0.9rem; font-size: 0.95rem; border: none; }
+        .mg-spinner { width: 34px; height: 34px; border: 3px solid rgba(0,230,118,0.25); border-top-color: var(--accent); border-radius: 50%; animation: mg-spin 0.8s linear infinite; margin-bottom: 1.1rem; }
+        @keyframes mg-spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
+<div id="mandatory-gate">
+    <div id="mg-content"></div>
+</div>
 
 <!-- 🌟 شاشة تسجيل الدخول المحدثة -->
 <div class="auth-screen" id="loginScreen">
@@ -1902,6 +1916,91 @@ async function ensureNativeLocationPermission() {
         return status.location === 'granted';
     } catch (e) { return true; }
 }
+
+// =========================================================================
+// 🆕 بوابة الأذونات الإجبارية (نفس نظام جبهالي ماركت بالظبط) - شغالة جوه الـ APK بس.
+// أول ما التطبيق يتفتح: بيطلب صلاحية الإشعارات ثم صلاحية الموقع ورا بعض تلقائيًا،
+// ومينفعش الطيار يستخدم البرنامج غير لو الموقع متسمح بيه والـ GPS شغال فعليًا (عشان
+// التوصيل والتتبع الحي محتاجين GPS شغال طول الوقت). وطول ما التطبيق مفتوح، بيتعمل
+// فحص دوري كل فترة، فلو الطيار قفل صلاحية الموقع أو قفل الـ GPS من نص الاستخدام،
+// هتظهرله البوابة تاني تطلب منه يرجع يفعّلها.
+// =========================================================================
+var mgRunning = false, mgIntervalId = null;
+
+function showMandatoryGate(state) {
+    var gate = document.getElementById('mandatory-gate');
+    var content = document.getElementById('mg-content');
+    if (state === 'checking') {
+        content.innerHTML = '<div class="mg-spinner"></div><div class="mg-title">بنجهزلك التطبيق...</div><div class="mg-text">بنتأكد من صلاحيات الإشعارات والموقع، ثواني بسيطة 🙏</div>';
+    } else if (state === 'denied') {
+        content.innerHTML = '<i class="fa-solid fa-map-marker-alt mg-icon is-error"></i><div class="mg-title">لازم تسمح بصلاحية الموقع</div><div class="mg-text">التطبيق محتاج صلاحية الموقع عشان يقدر يتتبع رحلتك ويوصّلك بدقة للمحل والعميل. لو دوست "لا تسمح" بالغلط، افتح: إعدادات الهاتف ← التطبيقات ← جبهالي ريدر ← الأذونات ← فعّل "الموقع"، وبعدين ارجع دوس الزرار تحت.</div><button type="button" class="mg-btn" onclick="runMandatoryPermissionGate()">حاول تاني</button>';
+    } else if (state === 'gps-off') {
+        content.innerHTML = '<i class="fa-solid fa-location-crosshairs mg-icon is-error"></i><div class="mg-title">خدمة الموقع (GPS) مقفولة</div><div class="mg-text">من فضلك فعّل خدمة تحديد الموقع (GPS) من هاتفك عشان تقدر تستخدم التطبيق: افتح شريط الإشعارات السريع من أعلى الشاشة ودوس على أيقونة "الموقع"، وبعدين ارجع دوس الزرار تحت.</div><button type="button" class="mg-btn" onclick="runMandatoryPermissionGate()">حاول تاني</button>';
+    }
+    gate.classList.add('show');
+}
+
+function hideMandatoryGate() {
+    document.getElementById('mandatory-gate').classList.remove('show');
+}
+
+async function checkGpsAndPermissionOk() {
+    if (!isRunningInsideNativeApp()) return { ok: true };
+    var geo = window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation;
+    if (!geo) return { ok: true };
+    try {
+        // 🆕 checkPermissions() بترمي استثناء لو خدمة الموقع (GPS) نفسها مقفولة من
+        // هاتف الطيار (موضّح رسميًا في توثيق Capacitor) - فحص فوري ١٠٠٪، من غير أي
+        // مهلة زمنية أو انتظار لموقع فعلي
+        var status = await geo.checkPermissions();
+        if (status.location !== 'granted') return { ok: false, reason: 'denied' };
+        return { ok: true };
+    } catch (e) {
+        return { ok: false, reason: 'gps-off' };
+    }
+}
+
+async function runMandatoryPermissionGate() {
+    if (!isRunningInsideNativeApp()) { hideMandatoryGate(); return; }
+    if (mgRunning) return;
+    mgRunning = true;
+    showMandatoryGate('checking');
+    try {
+        var notif = window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications;
+        if (notif) {
+            var ns = await notif.checkPermissions();
+            if (ns.display !== 'granted') { await notif.requestPermissions(); }
+        }
+    } catch (e) { /* الإشعارات مش شرط أساسي لتشغيل البرنامج، نكمل عادي */ }
+
+    var geo = window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation;
+    if (!geo) { hideMandatoryGate(); mgRunning = false; return; }
+    var locGranted = false, gpsOff = false;
+    try {
+        var ls = await geo.checkPermissions();
+        if (ls.location !== 'granted') { ls = await geo.requestPermissions(); }
+        locGranted = (ls.location === 'granted');
+    } catch (e) {
+        // 🆕 checkPermissions/requestPermissions بترمي استثناء لو خدمة الـ GPS نفسها
+        // مقفولة (مش مجرد إذن مرفوض) - نميّز بين الحالتين عشان نوري رسالة مضبوطة
+        gpsOff = true;
+    }
+
+    if (gpsOff) { showMandatoryGate('gps-off'); mgRunning = false; return; }
+    if (!locGranted) { showMandatoryGate('denied'); mgRunning = false; return; }
+
+    // 🆕 وصلنا هنا يبقى الإذن والـ GPS اتأكدنا منهم فعلاً
+    hideMandatoryGate();
+    startGlobalPositionWatch();
+    mgRunning = false;
+}
+
+async function silentPermissionRecheck() {
+    if (!isRunningInsideNativeApp() || document.visibilityState !== 'visible') return;
+    var result = await checkGpsAndPermissionOk();
+    if (!result.ok) { runMandatoryPermissionGate(); }
+}
+// ============== نهاية بوابة الأذونات الإجبارية ==============
 
 function getActiveOrdersForMap() {
     var list = [];
@@ -3955,7 +4054,10 @@ function manualRefresh() {
 function init() {
     buildNav();
     migrateOldDoneOrdersToHistoryOnce();
-    startGlobalPositionWatch();
+    runMandatoryPermissionGate(); // 🆕 بوابة GPS/الموقع الإجبارية - أول حاجة تحصل قبل أي حاجة تانية
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') { silentPermissionRecheck(); } });
+    if (mgIntervalId) clearInterval(mgIntervalId);
+    mgIntervalId = setInterval(silentPermissionRecheck, 5000);
     Promise.all([checkForForcedUpdate(), checkPilotStatusMidSession(), checkAvailability(), fetchOrders(), fetchInboxMessages(), trySyncPendingDeliveries(), trySyncPendingActions()]).then(function() {
         if (!currentDrawerPage) renderCurrentTab(false);
     });

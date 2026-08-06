@@ -733,7 +733,7 @@
 </div>
 
 <script>
-var GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwqY6kcM9jR5cfvv4drTinbsWYqLHb9ASr2EIP47aqMUHyljAqaYLabRxmks7PIM_k45w/exec";
+var GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyuu8JZjNkWpaggyMgez3i8DCuwu_t4lLokurac9n92pl8D_qCVN7FtPBxtRUEvu-1Lag/exec";
 var APP_VERSION = "3.0.1"; // لازم يطابق قيمة الخلية D2 في الشيت، وإلا هيظهر تحديث إجباري
 
 // ⚡ عزل بيانات كل طيار عن التاني على نفس الجهاز: كل بيانات الطيار (أرباح/سجل/طلبات...) بتتخزن
@@ -2979,10 +2979,10 @@ function parseOrderDetailsStructured(orderDetails) {
 }
 
 // 🆕 كاش المسافات الحقيقية لكروت الطلبات (منفصل عن كاش الخريطة، شغال حتى لو تبويب الخريطة معمول له تصفير)
-var riderOrderDistCache = {}; // { bon: { distRiderShop, distShopCust, hasReal, lastBgCalc } }
+var riderOrderDistCache = {}; // { bon: { distRiderShop, distShopCust, distRiderCust, hasReal, hasRealCust, lastBgCalc, lastBgCalcCust } }
 
 function getOrderDistCache(bon) {
-    if (!riderOrderDistCache[bon]) { riderOrderDistCache[bon] = { distRiderShop: null, distShopCust: null, hasReal: false, lastBgCalc: 0 }; }
+    if (!riderOrderDistCache[bon]) { riderOrderDistCache[bon] = { distRiderShop: null, distShopCust: null, distRiderCust: null, hasReal: false, hasRealCust: false, lastBgCalc: 0, lastBgCalcCust: 0 }; }
     return riderOrderDistCache[bon];
 }
 
@@ -2991,13 +2991,19 @@ function computeOrderDistances(o) {
     var custPos = parseLatLngFromLocationString(o.customerLocation);
     var shopPos = parseLatLngFromLocationString(o.storeLocation);
     var cache = getOrderDistCache(o.bon);
+    var phase = getOrderPhase(o);
     if (shopPos && custPos && cache.distShopCust === null) { cache.distShopCust = haversineKm(shopPos.lat, shopPos.lng, custPos.lat, custPos.lng).toFixed(3) + ' كم'; }
     var riderPos = (riderLiveMarker && riderLiveMarker.getLatLng()) || riderGlobalPos;
-    if (shopPos && riderPos) {
+    if (shopPos && riderPos && phase !== 'delivering') {
         if (!cache.hasReal) { cache.distRiderShop = haversineKm(riderPos.lat, riderPos.lng, shopPos.lat, shopPos.lng).toFixed(3) + ' كم'; }
         refreshOrderCardRealDistance(o.bon, riderPos, shopPos);
     }
-    return { custPos: custPos, shopPos: shopPos, distRiderShop: cache.distRiderShop, distShopCust: cache.distShopCust };
+    // 🆕 لما الطلب يبقى "جاري التوصيل"، بنحسب بنفس الفكرة مسافة حية من مكان الطيار الحالي للعميل
+    if (custPos && riderPos && phase === 'delivering') {
+        if (!cache.hasRealCust) { cache.distRiderCust = haversineKm(riderPos.lat, riderPos.lng, custPos.lat, custPos.lng).toFixed(3) + ' كم'; }
+        refreshOrderCardRealCustDistance(o.bon, riderPos, custPos);
+    }
+    return { custPos: custPos, shopPos: shopPos, distRiderShop: cache.distRiderShop, distShopCust: cache.distShopCust, distRiderCust: cache.distRiderCust };
 }
 
 async function refreshOrderCardRealDistance(bon, riderPos, shopPos) {
@@ -3016,11 +3022,51 @@ async function refreshOrderCardRealDistance(bon, riderPos, shopPos) {
     } catch (e) {}
 }
 
+// 🆕 نفس فكرة refreshOrderCardRealDistance، بس للمسافة الحقيقية من الطيار للعميل وقت "جاري التوصيل"
+async function refreshOrderCardRealCustDistance(bon, riderPos, custPos) {
+    var cache = getOrderDistCache(bon);
+    var now = Date.now();
+    if (now - cache.lastBgCalcCust < 8000) return;
+    cache.lastBgCalcCust = now;
+    try {
+        var data = await fetchOsrmRoute(riderPos, custPos.lat, custPos.lng, 1);
+        if (data && data.routes && data.routes[0]) {
+            cache.distRiderCust = (data.routes[0].distance / 1000).toFixed(3) + ' كم';
+            cache.hasRealCust = true;
+            var el = document.getElementById('ocdist-cust-' + bon);
+            if (el) { el.textContent = cache.distRiderCust; }
+        }
+    } catch (e) {}
+}
+
 // 🆕 بيحدث مسافات كل الكروت الظاهرة دلوقتي (بيتنادى كل ما مكانك يتحدث)
 function refreshVisibleOrderCardDistances() {
     if (!allOrders || !allOrders.length) return;
     for (var i = 0; i < allOrders.length; i++) { computeOrderDistances(allOrders[i]); }
 }
+
+// =========================================================================
+// 🆕 بيبعت مسافة الوصول الحية (للمحل وقت "جاري التحضير"، أو للعميل وقت "جاري
+// التوصيل") للسيرفر كل شوية، عشان تطبيق جبهالي ماركت يقدر يعرضها للعميل بشكل حي
+// =========================================================================
+var RIDER_ETA_PUSH_INTERVAL_MS = 10000;
+
+function pushLiveEtaUpdates() {
+    if (!allOrders || !allOrders.length || !ACTIVE_PILOT_ID) return;
+    for (var i = 0; i < allOrders.length; i++) {
+        var o = allOrders[i];
+        if (!o.isAccepted || String(o.pilotId) !== String(ACTIVE_PILOT_ID)) continue;
+        var phase = getOrderPhase(o);
+        if (phase !== 'accepted' && phase !== 'preparing' && phase !== 'delivering') continue;
+        var dist = computeOrderDistances(o);
+        var stage = (phase === 'delivering') ? 'cust' : 'shop';
+        var etaText = (stage === 'cust') ? dist.distRiderCust : dist.distRiderShop;
+        if (!etaText) continue;
+        var body = JSON.stringify({ action: 'updateFromReader', bon: o.bon, type: 'updateEta', pilotId: ACTIVE_PILOT_ID, stage: stage, etaText: etaText });
+        fetch(GOOGLE_SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body, redirect: 'follow' }).catch(function () {});
+    }
+}
+// ============== نهاية بث المسافة الحية ==============
 
 function toggleNotes(bon) {
     var body = document.getElementById('ndtl-' + bon); var arrow = document.getElementById('narr-' + bon);
@@ -4058,6 +4104,7 @@ function init() {
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') { silentPermissionRecheck(); } });
     if (mgIntervalId) clearInterval(mgIntervalId);
     mgIntervalId = setInterval(silentPermissionRecheck, 5000);
+    setInterval(pushLiveEtaUpdates, RIDER_ETA_PUSH_INTERVAL_MS); // 🆕 بث مسافة الوصول الحية لتطبيق ماركت
     Promise.all([checkForForcedUpdate(), checkPilotStatusMidSession(), checkAvailability(), fetchOrders(), fetchInboxMessages(), trySyncPendingDeliveries(), trySyncPendingActions()]).then(function() {
         if (!currentDrawerPage) renderCurrentTab(false);
     });

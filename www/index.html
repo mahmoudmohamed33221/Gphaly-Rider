@@ -2304,7 +2304,8 @@ function updateRiderMapMarkers() {
             riderMapMarkerRefs[bonKey].cust = m1;
             boundsPoints.push([custPos.lat, custPos.lng]);
         }
-        if (shopPos) {
+        if (shopPos && orderPhase !== 'delivering') {
+            // 🆕 دبوس المحل بيظهر بس لو الطلب لسه في مرحلة "مقبول" أو "جاري التجهيز" - أول ما يبقى "جاري التوصيل" الدبوس ده يختفي تمامًا من الخريطة لأن الطيار خلاص استلم واتجه للعميل
             var m2 = L.marker([shopPos.lat, shopPos.lng], { icon: buildRiderPinIcon(color, 'fa-store') }).addTo(riderMapMarkersLayer);
             m2.bindTooltip(buildTooltipCardHtml(bonKey, 'shop'), { permanent: true, direction: 'top', offset: [0, -14], className: 'rdr-tooltip' });
             m2.on('click', (function (bk) { return function () { onOrderMarkerClick(bk, 'shop'); }; })(bonKey));
@@ -2313,11 +2314,15 @@ function updateRiderMapMarkers() {
         }
         if (custPos || shopPos) {
             // 🆕 كارت الطلب فوق: بلون الطلب نفسه، وأيقونات بدل الكلام، ودوسة عليه بتفتح خيارين
+            // 🆕 صف مسافة "الطيار للمحل" بيتشال تمامًا من الكارت أول ما الطلب يبقى "جاري التوصيل" - يفضل بس صف مسافة العميل شغال
+            var shopRowHtml = (orderPhase !== 'delivering')
+                ? ('<div class="rdr-lg-dist"><i class="fa-solid fa-motorcycle"></i><i class="fa-solid fa-chevron-left rdr-lg-arrow"></i><i class="fa-solid fa-store"></i><span id="dist-shop-' + bonKey + '">' + (riderShopKm || '—') + '</span></div>')
+                : '';
             legendHtml += '<div class="rdr-map-legend-item" id="legend-' + bonKey + '" data-bon="' + bonKey + '" onclick="openLegendCardMenu(\'' + bonKey + '\')" style="background:' + color + '1F;border-color:' + color + ';">'
                 + '<div class="rdr-lg-bon" style="color:' + color + ';"><i class="fa-solid fa-hashtag"></i>' + o.bon + '</div>'
                 + '<div class="rdr-lg-name"><i class="fa-solid fa-user"></i>' + escHtml(o.name || '') + '</div>'
                 + '<div class="rdr-lg-shop"><i class="fa-solid fa-store"></i>' + escHtml(shopName || 'المحل') + '</div>'
-                + '<div class="rdr-lg-dist"><i class="fa-solid fa-motorcycle"></i><i class="fa-solid fa-chevron-left rdr-lg-arrow"></i><i class="fa-solid fa-store"></i><span id="dist-shop-' + bonKey + '">' + (riderShopKm || '—') + '</span></div>'
+                + shopRowHtml
                 + '<div class="rdr-lg-dist"><i class="fa-solid fa-store"></i><i class="fa-solid fa-chevron-left rdr-lg-arrow"></i><i class="fa-solid fa-house"></i><span id="dist-cust-' + bonKey + '">' + (shopCustKm || '—') + '</span></div>'
                 + '</div>';
         }
@@ -2517,6 +2522,16 @@ var RIDER_MATCH_FWD_WINDOW = 40;
 var riderLastSnapTime = 0;
 var RIDER_SNAP_MIN_INTERVAL_MS = 3000; // تصحيح الموقع على الشارع كل 3 ثواني بحد أقصى، عشان نحترم حد الاستخدام العادل لسيرفر OSRM المجاني
 
+// 🆕 هدف المسار الحالي (فين رايح) - محفوظ عشان لو الطيار خرج عن الخط المرسوم نقدر نطلب مسار جديد لنفس الوجهة تلقائيًا
+var riderRouteDest = null; // { lat, lng, label }
+var riderRouteRecalcInFlight = false;
+var riderLastRerouteTime = 0;
+var RIDER_REROUTE_COOLDOWN_MS = 12000; // منمنعش أكتر من إعادة حساب واحدة كل 12 ثانية عشان منضربش حد الاستخدام المجاني لسيرفر OSRM
+var riderLastRawFixTime = 0;
+var riderBadFixStreak = 0;
+var RIDER_MAX_GPS_ACCURACY_M = 60; // أي قراءة GPS دقتها أسوأ من كده (نص قطر الخطأ بالمتر) بنستناها تتحسن بدل ما نلزق الدبوس فيها غلط
+var RIDER_MAX_PLAUSIBLE_SPEED_KMH = 140; // قفزة توحي بسرعة أعلى من كده مستحيل تكون حقيقية - غالبًا ضجيج GPS
+
 async function startRiderRoute(destLat, destLng, label) {
     var infoEl = document.getElementById('riderRouteInfo');
     var infoText = document.getElementById('riderRouteInfoText');
@@ -2534,6 +2549,8 @@ async function startRiderRoute(destLat, destLng, label) {
         if (riderRouteLayer) { riderMapInstance.removeLayer(riderRouteLayer); }
         riderRouteLayer = L.polyline(coords, { color: '#00E676', weight: 6, opacity: 0.92, lineCap: 'round' }).addTo(riderMapInstance);
         riderRouteFullCoords = coords.slice();
+        riderRouteDest = { lat: destLat, lng: destLng, label: label }; // 🆕 محفوظ عشان لو خرجت عن المسار نطلب مسار جديد لنفس الوجهة أوتوماتيك
+        riderLastRerouteTime = Date.now();
         riderLastMatchedIdx = null;
         riderLastSnapTime = 0; // نخلي أول نبضة GPS بعد رسم المسار تصحح مكانك على طول
         applyMapFocusVisuals(); // 🆕 دلوقتي المسار شغال - نفعّل وضع عرض الدبوس المستهدف بس
@@ -2573,6 +2590,7 @@ async function startRiderRoute(destLat, destLng, label) {
 function clearRiderRoute() {
     if (riderRouteLayer && riderMapInstance) { riderMapInstance.removeLayer(riderRouteLayer); riderRouteLayer = null; }
     riderRouteFullCoords = null;
+    riderRouteDest = null;
     riderLastMatchedIdx = null;
     var infoEl = document.getElementById('riderRouteInfo');
     if (infoEl) infoEl.style.display = 'none';
@@ -2875,6 +2893,27 @@ async function startRiderLiveTracking() {
         var lat = pos.coords.latitude, lng = pos.coords.longitude;
         if (!riderMapInstance || !riderMapMarkersLayer) return;
 
+        // 🆕 فلترة نبضات الـ GPS الرديئة أول حاجة قبل أي حساب: ده اللي بيحل مشكلة "يلاقيه في آخر الدنيا وبعدين يرجع"
+        // القفزة دي بتحصل لما الموبايل يديك قراءة موقع دقتها وحشة (أبراج شبكة بدل ستالايت مثلاً) فالدبوس بيتلزق فيها غلط لحظة واحدة
+        var accNow = (typeof pos.coords.accuracy === 'number') ? pos.coords.accuracy : null;
+        var nowRaw = Date.now();
+        if (riderLiveMarker) {
+            var prevLL = riderLiveMarker.getLatLng();
+            var jumpKm = haversineKm(prevLL.lat, prevLL.lng, lat, lng);
+            var secsSinceLast = riderLastRawFixTime ? Math.max(0.4, (nowRaw - riderLastRawFixTime) / 1000) : 1.5;
+            var impliedSpeedKmh = (jumpKm / secsSinceLast) * 3600;
+            var badAccuracy = (accNow !== null && accNow > RIDER_MAX_GPS_ACCURACY_M);
+            var impossibleJump = impliedSpeedKmh > RIDER_MAX_PLAUSIBLE_SPEED_KMH;
+            if (badAccuracy || impossibleJump) {
+                riderBadFixStreak++;
+                // لو القراءة السيئة فضلت متكررة كذا مرة ورا بعض، يبقى نقبلها كأنها الوضع الحقيقي (يمكن فعلاً دخل منطقة تغطية ضعيفة)
+                if (riderBadFixStreak < 5) { return; }
+            } else {
+                riderBadFixStreak = 0;
+            }
+        }
+        riderLastRawFixTime = nowRaw;
+
         // 🆕 مدة الانزلاق بتتحسب من الوقت الفعلي اللي عدى من آخر تحديث GPS، عشان الحركة تفضل مستمرة وملهاش وقفات بين كل تحديث والتاني
         var nowTick = Date.now();
         var animDuration = riderLastTickTime ? (nowTick - riderLastTickTime) : 1000;
@@ -2920,6 +2959,15 @@ async function startRiderLiveTracking() {
                 updateRiderDistancesLive(localSnap);
                 trimRouteProgressAt(localSnap);
                 return;
+            } else if (riderRouteDest) {
+                // 🆕 خرجت فعليًا عن المسار المرسوم (أبعد من الحد المسموح) - يبقى غيّر طريقه، فنطلب مسار جديد من مكانه الحالي لنفس الوجهة
+                // منستناش رد السيرفر عشان نوقف الدبوس - بيكمل يتحرك بالطريقة العادية تحت وبمجرد ما المسار الجديد يوصل هيتحدث تلقائي
+                var nowReroute = Date.now();
+                if (!riderRouteRecalcInFlight && (nowReroute - riderLastRerouteTime) > RIDER_REROUTE_COOLDOWN_MS) {
+                    riderLastRerouteTime = nowReroute;
+                    riderRouteRecalcInFlight = true;
+                    startRiderRoute(riderRouteDest.lat, riderRouteDest.lng, riderRouteDest.label).finally(function () { riderRouteRecalcInFlight = false; });
+                }
             }
         }
 

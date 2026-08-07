@@ -2889,6 +2889,9 @@ async function startRiderLiveTracking() {
     if (!ok) return;
     startCompassTracking();
     if (riderGeoWatchId !== null) return;
+    // 🆕 نوقف المتتبع "الخفيف" العام وقت ما تبويب الخريطة شغال - عشان منفضلش عندنا نبضتين GPS مستقلتين
+    // شغالين في نفس الوقت (كانوا بيتنافسوا مع بعض وده جزء من سبب اختلاف الرقم بين الخريطة والعميل)
+    if (riderGlobalWatchId !== null && navigator.geolocation) { navigator.geolocation.clearWatch(riderGlobalWatchId); riderGlobalWatchId = null; }
     riderGeoWatchId = navigator.geolocation.watchPosition(function (pos) {
         var lat = pos.coords.latitude, lng = pos.coords.longitude;
         if (!riderMapInstance || !riderMapMarkersLayer) return;
@@ -2992,6 +2995,8 @@ function stopRiderLiveTracking() {
     if (riderGeoWatchId !== null && navigator.geolocation) { navigator.geolocation.clearWatch(riderGeoWatchId); riderGeoWatchId = null; }
     stopCompassTracking();
     riderLastTickTime = null;
+    // 🆕 نرجع نشغل المتتبع "الخفيف" العام تاني عشان مسافات كروت الطلبات والتحديث اللي بيتبعت للعميل يفضلوا شغالين حتى برة تبويب الخريطة
+    startGlobalPositionWatch();
 }
 
 function teardownRiderMap() {
@@ -3004,13 +3009,36 @@ function teardownRiderMap() {
 // ============== 🆕 نظام مواقع خفيف لكارت الطلب (شغال طول الوقت، مش مربوط بتبويب الخريطة) ==============
 var riderGlobalPos = null;
 var riderGlobalWatchId = null;
+var riderGlobalLastRawFixTime = 0;
+var riderGlobalBadFixStreak = 0;
 
 async function startGlobalPositionWatch() {
     if (riderGlobalWatchId !== null || !navigator.geolocation) return;
     var ok = await ensureNativeLocationPermission();
     if (!ok) return;
     riderGlobalWatchId = navigator.geolocation.watchPosition(function (pos) {
-        riderGlobalPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        var lat = pos.coords.latitude, lng = pos.coords.longitude;
+        // 🆕 نفس فلترة الدقة اللي في متتبع الخريطة بالظبط - عشان الرقم اللي بيوصل للعميل (لما تبويب
+        // الخريطة يكون مقفول) يفضل دقيق برده ومايتلخبطش بقراءة GPS رديئة لحظية
+        var accNow = (typeof pos.coords.accuracy === 'number') ? pos.coords.accuracy : null;
+        var nowRaw = Date.now();
+        if (riderGlobalPos) {
+            var jumpKm = haversineKm(riderGlobalPos.lat, riderGlobalPos.lng, lat, lng);
+            var secsSinceLast = riderGlobalLastRawFixTime ? Math.max(0.4, (nowRaw - riderGlobalLastRawFixTime) / 1000) : 1.5;
+            var impliedSpeedKmh = (jumpKm / secsSinceLast) * 3600;
+            var badAccuracy = (accNow !== null && accNow > RIDER_MAX_GPS_ACCURACY_M);
+            var impossibleJump = impliedSpeedKmh > RIDER_MAX_PLAUSIBLE_SPEED_KMH;
+            if (badAccuracy || impossibleJump) {
+                riderGlobalBadFixStreak++;
+                if (riderGlobalBadFixStreak < 5) { return; }
+            } else {
+                riderGlobalBadFixStreak = 0;
+            }
+        }
+        riderGlobalLastRawFixTime = nowRaw;
+        // 🆕 نحاول نلزق مكانك على أقرب شارع من شبكة الشوارع المحفوظة حتى وإحنا مش في تبويب الخريطة
+        var snapped = snapToLocalRoadNetwork(lat, lng);
+        riderGlobalPos = snapped || { lat: lat, lng: lng };
         refreshVisibleOrderCardDistances();
     }, function (err) { console.warn('global geo watch error', err); }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 });
 }
@@ -3035,21 +3063,37 @@ function getOrderDistCache(bon) {
 }
 
 // 🆕 بيحسب مسافات الطلب (تقريبي فوري + يبدأ يجيب الرقم الحقيقي في الخلفية)
+// 🆕 لو الخريطة فاتحة وعندها دبوس ورقم حقيقي لنفس الطلب أصلاً، بناخد نفس الرقم ده بالظبط
+// بدل ما نحسبه من جديد لوحدنا بطلب منفصل للسيرفر - وده اللي بيضمن إن الرقم اللي بيتبعت
+// للسيرفر (وبيظهر عند العميل في تطبيق ماركت) يبقى مطابق 100% للرقم الظاهر على خريطة الطيار نفسها،
+// بدل ما يبقى عندنا مصدرين مستقلين بيحسبوا "نفس الحاجة" في توقيتين مختلفين ويختلفوا عن بعض
 function computeOrderDistances(o) {
     var custPos = parseLatLngFromLocationString(o.customerLocation);
     var shopPos = parseLatLngFromLocationString(o.storeLocation);
     var cache = getOrderDistCache(o.bon);
     var phase = getOrderPhase(o);
     if (shopPos && custPos && cache.distShopCust === null) { cache.distShopCust = haversineKm(shopPos.lat, shopPos.lng, custPos.lat, custPos.lng).toFixed(3) + ' كم'; }
+    var mapRef = riderMapMarkerRefs[String(o.bon)];
     var riderPos = (riderLiveMarker && riderLiveMarker.getLatLng()) || riderGlobalPos;
     if (shopPos && riderPos && phase !== 'delivering') {
-        if (!cache.hasReal) { cache.distRiderShop = haversineKm(riderPos.lat, riderPos.lng, shopPos.lat, shopPos.lng).toFixed(3) + ' كم'; }
-        refreshOrderCardRealDistance(o.bon, riderPos, shopPos);
+        if (mapRef && mapRef.distRiderShopText) {
+            // نفس الرقم اللي الخريطة نفسها بتعرضه - مصدر واحد بس
+            cache.distRiderShop = mapRef.distRiderShopText;
+            cache.hasReal = !!mapRef.hasRealDist;
+        } else {
+            if (!cache.hasReal) { cache.distRiderShop = haversineKm(riderPos.lat, riderPos.lng, shopPos.lat, shopPos.lng).toFixed(3) + ' كم'; }
+            refreshOrderCardRealDistance(o.bon, riderPos, shopPos); // بس لما مفيش دبوس خريطة شغال لنفس الطلب دلوقتي
+        }
     }
     // 🆕 لما الطلب يبقى "جاري التوصيل"، بنحسب بنفس الفكرة مسافة حية من مكان الطيار الحالي للعميل
     if (custPos && riderPos && phase === 'delivering') {
-        if (!cache.hasRealCust) { cache.distRiderCust = haversineKm(riderPos.lat, riderPos.lng, custPos.lat, custPos.lng).toFixed(3) + ' كم'; }
-        refreshOrderCardRealCustDistance(o.bon, riderPos, custPos);
+        if (mapRef && mapRef.distShopCustText) {
+            cache.distRiderCust = mapRef.distShopCustText;
+            cache.hasRealCust = !!mapRef.hasRealCustDist;
+        } else {
+            if (!cache.hasRealCust) { cache.distRiderCust = haversineKm(riderPos.lat, riderPos.lng, custPos.lat, custPos.lng).toFixed(3) + ' كم'; }
+            refreshOrderCardRealCustDistance(o.bon, riderPos, custPos);
+        }
     }
     return { custPos: custPos, shopPos: shopPos, distRiderShop: cache.distRiderShop, distShopCust: cache.distShopCust, distRiderCust: cache.distRiderCust };
 }

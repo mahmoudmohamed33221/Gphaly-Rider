@@ -2529,6 +2529,7 @@ var riderLastRerouteTime = 0;
 var RIDER_REROUTE_COOLDOWN_MS = 12000; // منمنعش أكتر من إعادة حساب واحدة كل 12 ثانية عشان منضربش حد الاستخدام المجاني لسيرفر OSRM
 var riderLastRawFixTime = 0;
 var riderBadFixStreak = 0;
+var riderFirstFixBadStreak = 0; // 🆕 عداد منفصل لجودة أول قراءة GPS قبل ما السهم يتحط لأول مرة
 var RIDER_MAX_GPS_ACCURACY_M = 60; // أي قراءة GPS دقتها أسوأ من كده (نص قطر الخطأ بالمتر) بنستناها تتحسن بدل ما نلزق الدبوس فيها غلط
 var RIDER_MAX_PLAUSIBLE_SPEED_KMH = 140; // قفزة توحي بسرعة أعلى من كده مستحيل تكون حقيقية - غالبًا ضجيج GPS
 
@@ -2914,6 +2915,15 @@ async function startRiderLiveTracking() {
             } else {
                 riderBadFixStreak = 0;
             }
+        } else {
+            // 🆕 نفس فلترة الدقة، بس لأول قراءة قبل ما السهم يتحط أصلاً: أول قراءة GPS بعد فتح الخريطة غالبًا بتكون تقريبية جدًا
+            // (من الكاش أو من الشبكة قبل ما الموبايل يقفل على الأقمار الصناعية) - فلو حطينا السهم عليها هيتحط في مكان غلط
+            // تمامًا ويفضل واخد بالها إنه "هناك" لحد ما يوصل تصحيح كبير يكسر حد السرعة المعقولة. فبننتظر قراءة دقتها معقولة الأول.
+            if (accNow !== null && accNow > RIDER_MAX_GPS_ACCURACY_M) {
+                riderFirstFixBadStreak++;
+                if (riderFirstFixBadStreak < 6) { return; }
+            }
+            riderFirstFixBadStreak = 0;
         }
         riderLastRawFixTime = nowRaw;
 
@@ -3033,6 +3043,8 @@ function stopRiderLiveTracking() {
     if (riderGeoWatchId !== null && navigator.geolocation) { navigator.geolocation.clearWatch(riderGeoWatchId); riderGeoWatchId = null; }
     stopCompassTracking();
     riderLastTickTime = null;
+    riderFirstFixBadStreak = 0; // 🆕 نصفّرها عشان أول قراءة في المرة الجاية تتفلتر من الأول برضو
+    riderBadFixStreak = 0;
     // 🆕 نرجع نشغل المتتبع "الخفيف" العام تاني عشان مسافات كروت الطلبات والتحديث اللي بيتبعت للعميل يفضلوا شغالين حتى برة تبويب الخريطة
     startGlobalPositionWatch();
 }

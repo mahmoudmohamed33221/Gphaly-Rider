@@ -2961,6 +2961,10 @@ async function startRiderLiveTracking() {
                 animateLiveMarkerTo(localSnap.lat, localSnap.lng, animDuration);
                 updateRiderDistancesLive(localSnap);
                 trimRouteProgressAt(localSnap);
+                // 🆕 نحسب الكيلومترات المتبقية من طول المسار المرسوم نفسه (الجزء الباقي بعد مكانك الحالي) في كل نبضة GPS
+                // ده اللي بيخلي الرقم يتحرك لايف صح مع كل حركة ولو بسيطة، بدل ما يفضل ثابت لحد ما يتعمل إعادة حساب كامل للمسار
+                var remainingCoords = [[localSnap.lat, localSnap.lng]].concat(riderRouteFullCoords.slice(localSnap.idx + 1));
+                syncActiveRouteDistance(computeCoordsDistanceKm(remainingCoords));
                 return;
             } else if (riderRouteDest) {
                 // 🆕 خرجت فعليًا عن المسار المرسوم (أبعد من الحد المسموح) - يبقى غيّر طريقه، فنطلب مسار جديد من مكانه الحالي لنفس الوجهة
@@ -2989,6 +2993,40 @@ async function startRiderLiveTracking() {
             fetchLocalRoadNetwork(lat, lng);
         }
     }, function (err) { console.warn('rider geo watch error', err); }, { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 });
+}
+
+// 🆕 بيجمع طول خط مسار (بالكيلومتر) من مجموعة نقاط متتالية - بنستخدمها عشان نحسب "الباقي فعليًا" من المسار المرسوم
+function computeCoordsDistanceKm(coords) {
+    var total = 0;
+    for (var i = 0; i < coords.length - 1; i++) {
+        total += haversineKm(coords[i][0], coords[i][1], coords[i + 1][0], coords[i + 1][1]);
+    }
+    return total;
+}
+
+// 🆕 لما يكون فيه مسار شغال دلوقتي، بيحدّث رقم الكيلومترات في كل الأماكن الثلاثة (الكارت فوق الخريطة، الهنت، كارت الطلب)
+// وشريط معلومات المسار نفسه - كل نبضة GPS، من طول المسار المتبقي فعليًا (مش خط مستقيم ومش رقم قديم متجمد)
+function syncActiveRouteDistance(remainingKm) {
+    if (!riderMapActiveRouteMarker) return;
+    var bonKey = riderMapActiveRouteMarker.bonKey, role = riderMapActiveRouteMarker.role;
+    var km3 = remainingKm.toFixed(3);
+    var text = km3 + ' كم';
+    var ref = riderMapMarkerRefs[bonKey];
+    if (ref) {
+        if (role === 'shop') { ref.distRiderShopText = text; ref.hasRealDist = true; }
+        else { ref.distShopCustText = text; ref.hasRealCustDist = true; }
+    }
+    var chipEl = document.getElementById('dist-' + role + '-' + bonKey);
+    if (chipEl) chipEl.textContent = text;
+    var ttEl = document.getElementById('tt-dist-' + bonKey + '-' + role);
+    if (ttEl) ttEl.textContent = text;
+    var ocEl = document.getElementById('ocdist-' + role + '-' + bonKey);
+    if (ocEl) ocEl.textContent = text;
+    var infoText = document.getElementById('riderRouteInfoText');
+    if (infoText && riderRouteDest) {
+        var mins = Math.max(1, Math.round((remainingKm / 22) * 60)); // نفس تقدير السرعة المتوسطة المستخدم أول ما اتحسب المسار
+        infoText.innerHTML = '<i class="fa-solid fa-route" style="margin-left:5px;"></i>' + escHtml(riderRouteDest.label || '') + ' — ' + km3 + ' كم — تقريبًا ' + mins + ' دقيقة';
+    }
 }
 
 function stopRiderLiveTracking() {

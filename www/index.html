@@ -2526,7 +2526,8 @@ var RIDER_SNAP_MIN_INTERVAL_MS = 3000; // تصحيح الموقع على الش�
 var riderRouteDest = null; // { lat, lng, label }
 var riderRouteRecalcInFlight = false;
 var riderLastRerouteTime = 0;
-var RIDER_REROUTE_COOLDOWN_MS = 12000; // منمنعش أكتر من إعادة حساب واحدة كل 12 ثانية عشان منضربش حد الاستخدام المجاني لسيرفر OSRM
+var riderOvershootLayer = null; // 🆕 خط منقط بيظهر لما تعدي نقطة الوصول وتكمل ماشي
+var RIDER_REROUTE_COOLDOWN_MS = 8000; // 🆕 قللناها من 12 لـ8 ثواني عشان إعادة الحساب تحس أسرع وأقرب لجوجل ماب دلوقتي بعد ما بقينا نكتشف الانحراف الحقيقي بسرعة
 var riderLastRawFixTime = 0;
 var riderBadFixStreak = 0;
 var riderFirstFixBadStreak = 0; // 🆕 عداد منفصل لجودة أول قراءة GPS قبل ما السهم يتحط لأول مرة
@@ -2542,6 +2543,7 @@ async function startRiderRoute(destLat, destLng, label) {
         return;
     }
     var from = riderLiveMarker.getLatLng();
+    clearOvershootLine(); // 🆕 مسار جديد بيتحسب - أي خط "عدّي" قديم بقى مالوش لازمة
     if (infoEl) infoEl.style.display = 'flex';
     if (infoText) infoText.textContent = 'جارٍ حساب أسرع مسار...';
     try {
@@ -2592,6 +2594,7 @@ function clearRiderRoute() {
     if (riderRouteLayer && riderMapInstance) { riderMapInstance.removeLayer(riderRouteLayer); riderRouteLayer = null; }
     riderRouteFullCoords = null;
     riderRouteDest = null;
+    clearOvershootLine();
     riderLastMatchedIdx = null;
     var infoEl = document.getElementById('riderRouteInfo');
     if (infoEl) infoEl.style.display = 'none';
@@ -2625,7 +2628,8 @@ function snapToLoadedRoute(lat, lng) {
         var d = haversineKm(lat, lng, proj.y, proj.x);
         if (d < bestDist) { bestDist = d; bestPoint = { lat: proj.y, lng: proj.x }; bestIdx = i; }
     }
-    if (bestDist > 0.35) return null; // بعيد جدًا عن المسار (يمكن غيّر طريقه) - منلزقهوش غصب
+    // 🆕 نزلناها لـ20 متر بناءً على طلبك - أي فرق حقيقي عن الخط أكتر من كده يتحسب خروج فعلي عن المسار
+    if (bestDist > 0.02) return null; // بعيد كفاية إنك غيّرت طريقك فعليًا - منلزقهوش غصب
     riderLastMatchedIdx = bestIdx;
     return { lat: bestPoint.lat, lng: bestPoint.lng, idx: bestIdx };
 }
@@ -2637,6 +2641,22 @@ function trimRouteProgressAt(snapResult) {
     if (remaining.length > 1) { riderRouteLayer.setLatLngs(remaining); }
 }
 
+// 🆕 لما توصل لنقطة الوصول وتكمل ماشي بعدها، بيرسم خط منقط أحمر من نقطة الوصول لمكانك الحالي - عشان يبان إنك عديت ولازم ترجع
+function updateOvershootLine(curLat, curLng) {
+    if (!riderRouteDest || !riderMapInstance) return;
+    var distToDest = haversineKm(curLat, curLng, riderRouteDest.lat, riderRouteDest.lng);
+    if (distToDest <= 0.02) { clearOvershootLine(); return; } // لسه قريب من نقطة الوصول - مفيش داعي للخط
+    var latlngs = [[riderRouteDest.lat, riderRouteDest.lng], [curLat, curLng]];
+    if (!riderOvershootLayer) {
+        riderOvershootLayer = L.polyline(latlngs, { color: '#EF4444', weight: 3, dashArray: '2,9', opacity: .85 }).addTo(riderMapMarkersLayer || riderMapInstance);
+    } else {
+        riderOvershootLayer.setLatLngs(latlngs);
+    }
+}
+function clearOvershootLine() {
+    if (riderOvershootLayer && riderMapInstance) { riderMapInstance.removeLayer(riderOvershootLayer); riderOvershootLayer = null; }
+}
+
 // نسخة بتدور على أقرب نقطة (بدون فهرس جاهز) - بتتستخدم بس لما مفيش مسار محلي وبنعتمد على تصحيح السيرفر
 function trimRouteProgress(lat, lng) {
     if (!riderRouteFullCoords || !riderRouteLayer || riderRouteFullCoords.length < 2) return;
@@ -2645,7 +2665,7 @@ function trimRouteProgress(lat, lng) {
         var d = haversineKm(lat, lng, riderRouteFullCoords[i][0], riderRouteFullCoords[i][1]);
         if (d < bestDist) { bestDist = d; bestIdx = i; }
     }
-    if (bestDist > 0.35) return;
+    if (bestDist > 0.02) return;
     var remaining = riderRouteFullCoords.slice(bestIdx);
     if (remaining.length > 1) { riderRouteLayer.setLatLngs(remaining); }
 }
@@ -2971,12 +2991,25 @@ async function startRiderLiveTracking() {
                 animateLiveMarkerTo(localSnap.lat, localSnap.lng, animDuration);
                 updateRiderDistancesLive(localSnap);
                 trimRouteProgressAt(localSnap);
+                clearOvershootLine(); // 🆕 رجع فوق المسار تاني - نمسح خط "العدّي" لو كان ظاهر
                 // 🆕 نحسب الكيلومترات المتبقية من طول المسار المرسوم نفسه (الجزء الباقي بعد مكانك الحالي) في كل نبضة GPS
                 // ده اللي بيخلي الرقم يتحرك لايف صح مع كل حركة ولو بسيطة، بدل ما يفضل ثابت لحد ما يتعمل إعادة حساب كامل للمسار
                 var remainingCoords = [[localSnap.lat, localSnap.lng]].concat(riderRouteFullCoords.slice(localSnap.idx + 1));
                 syncActiveRouteDistance(computeCoordsDistanceKm(remainingCoords));
                 return;
             } else if (riderRouteDest) {
+                // 🆕 لو آخر نقطة اتلزقنا بيها كانت قريبة من نهاية المسار، يبقى مش "غيّر طريقه" -
+                // ده "وصل للمكان وكمل ماشي بعده" (عدّى الهدف). في الحالة دي منعملش إعادة حساب مسار كامل من السيرفر،
+                // بدل كده نرسم خط بسيط منقط من مكان الوصول لمكانه الحالي عشان يعرف إنه عدّى ولازم يرجع
+                var n2 = riderRouteFullCoords.length;
+                var wasNearEnd = (riderLastMatchedIdx !== null && riderLastMatchedIdx >= n2 - 3);
+                if (wasNearEnd) {
+                    updateOvershootLine(lat, lng);
+                    animateLiveMarkerTo(lat, lng, animDuration);
+                    updateRiderDistancesLive({ lat: lat, lng: lng });
+                    return;
+                }
+                clearOvershootLine();
                 // 🆕 خرجت فعليًا عن المسار المرسوم (أبعد من الحد المسموح) - يبقى غيّر طريقه، فنطلب مسار جديد من مكانه الحالي لنفس الوجهة
                 // منستناش رد السيرفر عشان نوقف الدبوس - بيكمل يتحرك بالطريقة العادية تحت وبمجرد ما المسار الجديد يوصل هيتحدث تلقائي
                 var nowReroute = Date.now();

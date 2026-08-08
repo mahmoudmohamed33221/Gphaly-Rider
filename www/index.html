@@ -2840,7 +2840,7 @@ function snapToLocalRoadNetwork(lat, lng) {
         // 🆕 لو إحنا فعليًا عدّينا آخر الشارع القديم (t قريبة من 0 أو 1 يعني القراءة اتلزقت بآخر نقطة فيه ومش بتتحرك)،
         // متفضلش عالق عليه - سيب البحث يلاقي الشارع الجديد اللي إنت فعلاً ماشي فيه دلوقتي على طول من غير ما يستنى
         var oldSegExhausted = (prevProj.t <= 0.02 || prevProj.t >= 0.98);
-        if (!oldSegExhausted && (prevDist - bestDist < 0.006)) { bestIdx = riderLastAreaSegmentIdx; bestPoint = { lat: prevProj.y, lng: prevProj.x }; }
+        if (!oldSegExhausted && (prevDist - bestDist < 0.012)) { bestIdx = riderLastAreaSegmentIdx; bestPoint = { lat: prevProj.y, lng: prevProj.x }; }
     }
     riderLastAreaSegmentIdx = bestIdx;
     return bestPoint;
@@ -3054,13 +3054,14 @@ async function startRiderLiveTracking() {
         // 🆕 السهم نفسه دايمًا بيتحرك بحرية تامة حسب موقعك الفعلي (مع تنعيم بسيط من شبكة الشوارع القريبة لو موجودة) -
         // مش ملزوم يقف على الخط المرسوم، سواء المسار شغال أو مقفول، بالظبط زي ما طلبت
         var localAreaSnap = snapToLocalRoadNetwork(lat, lng);
-        if (localAreaSnap) {
-            animateLiveMarkerTo(localAreaSnap.lat, localAreaSnap.lng, animDuration);
-            if (!riderRouteFullCoords) { updateRiderDistancesLive(localAreaSnap); }
-        } else {
-            animateLiveMarkerTo(lat, lng, animDuration);
-            if (!riderRouteFullCoords) { updateRiderDistancesLive({ lat: lat, lng: lng }); }
+        var targetForMarker = localAreaSnap || { lat: lat, lng: lng };
+        // 🆕 منطقة "سكون": لو إنت واقف فعليًا (أو بتتحرك بأقل من كام متر)، منحركش السهم أبدًا -
+        // ده اللي بيمنع "الجنونة الخفيفة" ورعشة السهم العشوائية بسبب رعشة الـ GPS الطبيعية وانت واقف
+        var moveSinceLastKm = riderLiveMarker ? haversineKm(riderLiveMarker.getLatLng().lat, riderLiveMarker.getLatLng().lng, targetForMarker.lat, targetForMarker.lng) : 1;
+        if (!riderLiveMarker || moveSinceLastKm > 0.004) {
+            animateLiveMarkerTo(targetForMarker.lat, targetForMarker.lng, animDuration);
         }
+        if (!riderRouteFullCoords) { updateRiderDistancesLive(targetForMarker); }
 
         // لو مفيش شبكة شوارع محفوظة قريبة من مكاننا الحالي (أول مرة أو اتحركنا بعيد)، نجيبها في الخلفية
         if (!riderRoadNetworkCenter || haversineKm(lat, lng, riderRoadNetworkCenter.lat, riderRoadNetworkCenter.lng) > RIDER_ROAD_NETWORK_REFRESH_KM) {

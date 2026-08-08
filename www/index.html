@@ -2608,7 +2608,7 @@ function projectPointToSegment(px, py, ax, ay, bx, by) {
     var abLenSq = abx * abx + aby * aby;
     var t = abLenSq > 0 ? (apx * abx + apy * aby) / abLenSq : 0;
     t = Math.max(0, Math.min(1, t));
-    return { x: ax + abx * t, y: ay + aby * t };
+    return { x: ax + abx * t, y: ay + aby * t, t: t };
 }
 
 // 🆕 بيلزق مكانك على أقرب نقطة من خط المسار المحمّل عندنا فعليًا - فوري ومن غير أي تأخير شبكة، وده اللي بيحل مشكلة "الملف" وتأخير المسح
@@ -2639,6 +2639,28 @@ function trimRouteProgressAt(snapResult) {
     if (!riderRouteFullCoords || !riderRouteLayer || !snapResult) return;
     var remaining = [[snapResult.lat, snapResult.lng]].concat(riderRouteFullCoords.slice(snapResult.idx + 1));
     if (remaining.length > 1) { riderRouteLayer.setLatLngs(remaining); }
+}
+
+var riderRouteTrimAnimToken = 0;
+// 🆕 زي فرشة الرسم بالظبط: بداية الخط بتتحرك بسلاسة (فريم بفريم) لحد نقطة تقدمك الجديدة، مش تقفز دفعة واحدة
+// كل ما توصل قراءة GPS جديدة - عشان تحس إن الخط بيتلوّن معاك أول بأول وانت ماشي، مش بيتحدث كل شوية بقفزة كبيرة
+function animateRouteTrimTo(lat, lng, duration, tailCoords) {
+    if (!riderRouteLayer) return;
+    var myToken = ++riderRouteTrimAnimToken;
+    var curLatLngs = riderRouteLayer.getLatLngs();
+    var start = (curLatLngs && curLatLngs.length) ? curLatLngs[0] : { lat: lat, lng: lng };
+    var startTime = null;
+    duration = duration || 900;
+    function step(ts) {
+        if (myToken !== riderRouteTrimAnimToken || !riderRouteLayer) return;
+        if (!startTime) startTime = ts;
+        var progress = Math.min((ts - startTime) / duration, 1);
+        var curLat = start.lat + (lat - start.lat) * progress;
+        var curLng = start.lng + (lng - start.lng) * progress;
+        riderRouteLayer.setLatLngs([[curLat, curLng]].concat(tailCoords));
+        if (progress < 1) { requestAnimationFrame(step); }
+    }
+    requestAnimationFrame(step);
 }
 
 // 🆕 لما توصل لنقطة الوصول وتكمل ماشي بعدها، بيرسم خط منقط أحمر من نقطة الوصول لمكانك الحالي - عشان يبان إنك عديت ولازم ترجع
@@ -2809,13 +2831,16 @@ function snapToLocalRoadNetwork(lat, lng) {
     }
     if (bestDist > 0.08) { riderLastAreaSegmentIdx = null; return null; } // بعيد أوي عن أي شارع في الكاش - يمكن خرجت برة النطاق المحفوظ
 
-    // 🆕 استقرار: منسيبش الشارع اللي كنا عليه إلا لو الشارع الجديد أقرب بوضوح (فرق أكتر من 20 متر)
+    // 🆕 استقرار: منسيبش الشارع اللي كنا عليه إلا لو الشارع الجديد أقرب بوضوح (فرق أكتر من 6 متر)
     // ده اللي بيمنع القفز العشوائي بسبب رعشة الـ GPS الطبيعية وانت واقف أو ماشي
     if (riderLastAreaSegmentIdx !== null && riderLastAreaSegmentIdx !== bestIdx && riderLastAreaSegmentIdx < riderLocalRoadNetwork.length) {
         var prevSeg = riderLocalRoadNetwork[riderLastAreaSegmentIdx];
         var prevProj = projectPointToSegment(lng, lat, prevSeg[0][1], prevSeg[0][0], prevSeg[1][1], prevSeg[1][0]);
         var prevDist = haversineKm(lat, lng, prevProj.y, prevProj.x);
-        if (prevDist - bestDist < 0.02) { bestIdx = riderLastAreaSegmentIdx; bestPoint = { lat: prevProj.y, lng: prevProj.x }; }
+        // 🆕 لو إحنا فعليًا عدّينا آخر الشارع القديم (t قريبة من 0 أو 1 يعني القراءة اتلزقت بآخر نقطة فيه ومش بتتحرك)،
+        // متفضلش عالق عليه - سيب البحث يلاقي الشارع الجديد اللي إنت فعلاً ماشي فيه دلوقتي على طول من غير ما يستنى
+        var oldSegExhausted = (prevProj.t <= 0.02 || prevProj.t >= 0.98);
+        if (!oldSegExhausted && (prevDist - bestDist < 0.006)) { bestIdx = riderLastAreaSegmentIdx; bestPoint = { lat: prevProj.y, lng: prevProj.x }; }
     }
     riderLastAreaSegmentIdx = bestIdx;
     return bestPoint;
@@ -2997,7 +3022,8 @@ async function startRiderLiveTracking() {
         if (riderRouteFullCoords) {
             var localSnap = snapToLoadedRoute(lat, lng);
             if (localSnap) {
-                trimRouteProgressAt(localSnap);
+                // 🆕 خط المسار بيتحرك بسلاسة (فرشة رسم) مع كل حركة، بدل ما يقفز دفعة واحدة كل ما توصل قراءة GPS جديدة
+                animateRouteTrimTo(localSnap.lat, localSnap.lng, animDuration, riderRouteFullCoords.slice(localSnap.idx + 1));
                 clearOvershootLine(); // 🆕 رجع فوق المسار تاني - نمسح خط "العدّي" لو كان ظاهر
                 // 🆕 نحسب الكيلومترات المتبقية من طول المسار المرسوم نفسه (الجزء الباقي بعد مكانك الحالي) في كل نبضة GPS
                 var remainingCoords = [[localSnap.lat, localSnap.lng]].concat(riderRouteFullCoords.slice(localSnap.idx + 1));
@@ -3091,6 +3117,7 @@ function teardownRiderMap() {
     stopRiderLiveTracking();
     if (riderMapInstance) { try { riderMapInstance.off('zoomend', refreshAllTooltipContents); riderMapInstance.remove(); } catch (e) {} riderMapInstance = null; }
     riderMapMarkersLayer = null; riderLiveMarker = null; riderRouteLayer = null; riderRouteFullCoords = null; riderLastMatchedIdx = null; riderMapMarkerRefs = {}; riderMapFocusedBon = null; riderMapActiveRouteMarker = null;
+    riderOvershootLayer = null; // 🆕 الطبقة دي اتشالت خلاص مع الخريطة نفسها، نفضّي المرجع بتاعها
 }
 // ============== نهاية تبويب الخريطة ==============
 

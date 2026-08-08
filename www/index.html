@@ -2594,7 +2594,6 @@ function clearRiderRoute() {
     if (riderRouteLayer && riderMapInstance) { riderMapInstance.removeLayer(riderRouteLayer); riderRouteLayer = null; }
     riderRouteFullCoords = null;
     riderRouteDest = null;
-    riderHeadingFollowsRoute = false; // 🆕 اتمسح المسار - البوصلة ترجع تشتغل تاني
     clearOvershootLine();
     riderLastMatchedIdx = null;
     var infoEl = document.getElementById('riderRouteInfo');
@@ -2629,8 +2628,8 @@ function snapToLoadedRoute(lat, lng) {
         var d = haversineKm(lat, lng, proj.y, proj.x);
         if (d < bestDist) { bestDist = d; bestPoint = { lat: proj.y, lng: proj.x }; bestIdx = i; }
     }
-    // 🆕 نزلناها لـ20 متر بناءً على طلبك - أي فرق حقيقي عن الخط أكتر من كده يتحسب خروج فعلي عن المسار
-    if (bestDist > 0.02) return null; // بعيد كفاية إنك غيّرت طريقك فعليًا - منلزقهوش غصب
+    // 🆕 نزلناها لـ15 متر بناءً على طلبك - أي فرق حقيقي عن الخط أكتر من كده يتحسب خروج فعلي عن المسار
+    if (bestDist > 0.015) return null; // بعيد كفاية إنك غيّرت طريقك فعليًا - منلزقهوش غصب
     riderLastMatchedIdx = bestIdx;
     return { lat: bestPoint.lat, lng: bestPoint.lng, idx: bestIdx };
 }
@@ -2646,7 +2645,7 @@ function trimRouteProgressAt(snapResult) {
 function updateOvershootLine(curLat, curLng) {
     if (!riderRouteDest || !riderMapInstance) return;
     var distToDest = haversineKm(curLat, curLng, riderRouteDest.lat, riderRouteDest.lng);
-    if (distToDest <= 0.02) { clearOvershootLine(); return; } // لسه قريب من نقطة الوصول - مفيش داعي للخط
+    if (distToDest <= 0.015) { clearOvershootLine(); return; } // لسه قريب من نقطة الوصول - مفيش داعي للخط
     var latlngs = [[riderRouteDest.lat, riderRouteDest.lng], [curLat, curLng]];
     if (!riderOvershootLayer) {
         riderOvershootLayer = L.polyline(latlngs, { color: '#EF4444', weight: 3, dashArray: '2,9', opacity: .85 }).addTo(riderMapMarkersLayer || riderMapInstance);
@@ -2666,7 +2665,7 @@ function trimRouteProgress(lat, lng) {
         var d = haversineKm(lat, lng, riderRouteFullCoords[i][0], riderRouteFullCoords[i][1]);
         if (d < bestDist) { bestDist = d; bestIdx = i; }
     }
-    if (bestDist > 0.02) return;
+    if (bestDist > 0.015) return;
     var remaining = riderRouteFullCoords.slice(bestIdx);
     if (remaining.length > 1) { riderRouteLayer.setLatLngs(remaining); }
 }
@@ -2856,34 +2855,8 @@ function animateLiveMarkerTo(lat, lng, duration) {
     requestAnimationFrame(step);
 }
 
-// 🆕 زي animateLiveMarkerTo بالظبط، بس دي كمان بتحرك أول نقطة في خط المسار مع السهم فريم بفريم (نفس الحركة بالظبط) -
-// عشان مايبقاش فيه فراغ بين السهم وأول نقطة في الخط، لأن السهم بياخد وقت (duration) يتزحلق، والخط كان بيتحدث فورًا من غيره
-function animateLiveMarkerAndRoute(lat, lng, duration, tailCoords) {
-    if (!riderLiveMarker) {
-        placeOrUpdateLiveMarker(lat, lng);
-        if (riderRouteLayer) { riderRouteLayer.setLatLngs([[lat, lng]].concat(tailCoords)); }
-        return;
-    }
-    var myToken = ++riderMarkerAnimToken;
-    var start = riderLiveMarker.getLatLng();
-    var startTime = null;
-    duration = duration || 900;
-    function step(ts) {
-        if (myToken !== riderMarkerAnimToken || !riderLiveMarker) return;
-        if (!startTime) startTime = ts;
-        var progress = Math.min((ts - startTime) / duration, 1);
-        var curLat = start.lat + (lat - start.lat) * progress;
-        var curLng = start.lng + (lng - start.lng) * progress;
-        riderLiveMarker.setLatLng([curLat, curLng]);
-        if (riderRouteLayer) { riderRouteLayer.setLatLngs([[curLat, curLng]].concat(tailCoords)); }
-        if (progress < 1) { requestAnimationFrame(step); }
-    }
-    requestAnimationFrame(step);
-}
-
 // 🆕 البوصلة: بتدوّر السهم حسب اتجاهك حتى وانت واقف مكانك
 var riderCurrentHeading = 0;
-var riderHeadingFollowsRoute = false; // 🆕 لما تبقى true، اتجاه السهم بيتحدد من اتجاه المسار المرسوم نفسه، والبوصلة بتتجاهل تمامًا
 var riderHeadingListenerAdded = false;
 
 // 🆕 بيحسب اتجاه البوصلة (بالدرجة) من نقطة لنقطة - بنستخدمها عشان نوجّه السهم باتجاه المسار المرسوم نفسه بالظبط
@@ -2911,9 +2884,6 @@ function setLiveMarkerHeading(deg) {
 }
 
 function handleDeviceOrientationForHeading(e) {
-    // 🆕 وانت ماشي على مسار مرسوم، اتجاه المسار نفسه هو اللي بيحدد اتجاه السهم - البوصلة بتتجاهل تمامًا هنا
-    // (البوصلة بتتأثر بطريقة تركيب الموبايل على الدراجة وبالمغناطيسية اللي جنب الموتور، وده اللي كان بيدي اتجاه غلط أو متأخر)
-    if (riderHeadingFollowsRoute) return;
     var heading = null;
     if (typeof e.webkitCompassHeading === 'number') { heading = e.webkitCompassHeading; } // iOS
     else if (typeof e.alpha === 'number') { heading = 360 - e.alpha; } // أندرويد
@@ -3022,29 +2992,17 @@ async function startRiderLiveTracking() {
             return;
         }
 
-        // 🆕 لو عندنا مسار محمّل، نلزق مكانك عليه فورًا (حساب محلي، بدون أي تأخير شبكة) - ده اللي بيحل مشكلة الملف وتأخير المسح
+        // 🆕 لو عندنا مسار محمّل، بنحسب مكانك بالنسبة للخط (تقدمك، الانحراف، الاتجاه) - لكن السهم نفسه
+        // مش بيتحط عليه، بيفضل حر يتحرك بمكانه الفعلي زي بالظبط لما مفيش مسار خالص (شوف تحت)
         if (riderRouteFullCoords) {
             var localSnap = snapToLoadedRoute(lat, lng);
             if (localSnap) {
-                // 🆕 السهم والخط بيتحركوا مع بعض في نفس الحركة بالظبط (فريم بفريم)، مش إن الخط يقفز فورًا لمكانه
-                // النهائي والسهم يفضل بيتزحلق وراه - ده اللي كان بيسيب الفراغ اللي شايفه بين السهم وأول نقطة في المسار
-                var tailCoords = riderRouteFullCoords.slice(localSnap.idx + 1);
-                animateLiveMarkerAndRoute(localSnap.lat, localSnap.lng, animDuration, tailCoords);
-                updateRiderDistancesLive(localSnap);
+                trimRouteProgressAt(localSnap);
                 clearOvershootLine(); // 🆕 رجع فوق المسار تاني - نمسح خط "العدّي" لو كان ظاهر
-                // 🆕 اتجاه السهم دلوقتي بياخد اتجاهه من المسار المرسوم نفسه (النقطة الجاية على الخط)، مش من البوصلة -
-                // فوري ومظبوط دايمًا مهما كانت طريقة تركيب الموبايل على الدراجة
-                riderHeadingFollowsRoute = true;
-                var aheadIdx = Math.min(riderRouteFullCoords.length - 1, localSnap.idx + 3);
-                var aheadPt = riderRouteFullCoords[aheadIdx];
-                if (aheadPt && (aheadPt[0] !== localSnap.lat || aheadPt[1] !== localSnap.lng)) {
-                    setLiveMarkerHeading(bearingDeg(localSnap.lat, localSnap.lng, aheadPt[0], aheadPt[1]));
-                }
                 // 🆕 نحسب الكيلومترات المتبقية من طول المسار المرسوم نفسه (الجزء الباقي بعد مكانك الحالي) في كل نبضة GPS
-                // ده اللي بيخلي الرقم يتحرك لايف صح مع كل حركة ولو بسيطة، بدل ما يفضل ثابت لحد ما يتعمل إعادة حساب كامل للمسار
                 var remainingCoords = [[localSnap.lat, localSnap.lng]].concat(riderRouteFullCoords.slice(localSnap.idx + 1));
                 syncActiveRouteDistance(computeCoordsDistanceKm(remainingCoords));
-                return;
+                // ملحوظة: مفيش return هنا عن قصد - السهم لسه محتاج يتحرك لمكانه الفعلي تحت
             } else if (riderRouteDest) {
                 // 🆕 لو آخر نقطة اتلزقنا بيها كانت قريبة من نهاية المسار، يبقى مش "غيّر طريقه" -
                 // ده "وصل للمكان وكمل ماشي بعده" (عدّى الهدف). في الحالة دي منعملش إعادة حساب مسار كامل من السيرفر،
@@ -3052,34 +3010,30 @@ async function startRiderLiveTracking() {
                 var n2 = riderRouteFullCoords.length;
                 var wasNearEnd = (riderLastMatchedIdx !== null && riderLastMatchedIdx >= n2 - 3);
                 if (wasNearEnd) {
-                    riderHeadingFollowsRoute = false; // 🆕 عديت نهاية المسار - نرجع للبوصلة/اتجاه الـ GPS العادي
                     updateOvershootLine(lat, lng);
-                    animateLiveMarkerTo(lat, lng, animDuration);
-                    updateRiderDistancesLive({ lat: lat, lng: lng });
-                    return;
-                }
-                clearOvershootLine();
-                riderHeadingFollowsRoute = false; // 🆕 خرجت عن المسار فعليًا - نرجع للبوصلة/اتجاه الـ GPS العادي لحد ما المسار الجديد يتحدد
-                // 🆕 خرجت فعليًا عن المسار المرسوم (أبعد من الحد المسموح) - يبقى غيّر طريقه، فنطلب مسار جديد من مكانه الحالي لنفس الوجهة
-                // منستناش رد السيرفر عشان نوقف الدبوس - بيكمل يتحرك بالطريقة العادية تحت وبمجرد ما المسار الجديد يوصل هيتحدث تلقائي
-                var nowReroute = Date.now();
-                if (!riderRouteRecalcInFlight && (nowReroute - riderLastRerouteTime) > RIDER_REROUTE_COOLDOWN_MS) {
-                    riderLastRerouteTime = nowReroute;
-                    riderRouteRecalcInFlight = true;
-                    startRiderRoute(riderRouteDest.lat, riderRouteDest.lng, riderRouteDest.label).finally(function () { riderRouteRecalcInFlight = false; });
+                } else {
+                    clearOvershootLine();
+                    // 🆕 خرجت فعليًا عن المسار المرسوم (أبعد من الحد المسموح) - يبقى غيّر طريقه، فنطلب مسار جديد من مكانه الحالي لنفس الوجهة
+                    // منستناش رد السيرفر عشان نوقف الدبوس - بيكمل يتحرك بالطريقة العادية تحت وبمجرد ما المسار الجديد يوصل هيتحدث تلقائي
+                    var nowReroute = Date.now();
+                    if (!riderRouteRecalcInFlight && (nowReroute - riderLastRerouteTime) > RIDER_REROUTE_COOLDOWN_MS) {
+                        riderLastRerouteTime = nowReroute;
+                        riderRouteRecalcInFlight = true;
+                        startRiderRoute(riderRouteDest.lat, riderRouteDest.lng, riderRouteDest.label).finally(function () { riderRouteRecalcInFlight = false; });
+                    }
                 }
             }
         }
 
-        // لو مفيش مسار محمّل: نستخدم شبكة الشوارع القريبة المحفوظة عندنا لو موجودة - إلزاق محلي فوري بدون نت
-        riderHeadingFollowsRoute = false; // 🆕 مفيش مسار شغال - البوصلة/اتجاه الـ GPS هو المصدر هنا
+        // 🆕 السهم نفسه دايمًا بيتحرك بحرية تامة حسب موقعك الفعلي (مع تنعيم بسيط من شبكة الشوارع القريبة لو موجودة) -
+        // مش ملزوم يقف على الخط المرسوم، سواء المسار شغال أو مقفول، بالظبط زي ما طلبت
         var localAreaSnap = snapToLocalRoadNetwork(lat, lng);
         if (localAreaSnap) {
             animateLiveMarkerTo(localAreaSnap.lat, localAreaSnap.lng, animDuration);
-            updateRiderDistancesLive(localAreaSnap);
+            if (!riderRouteFullCoords) { updateRiderDistancesLive(localAreaSnap); }
         } else {
             animateLiveMarkerTo(lat, lng, animDuration);
-            updateRiderDistancesLive({ lat: lat, lng: lng });
+            if (!riderRouteFullCoords) { updateRiderDistancesLive({ lat: lat, lng: lng }); }
         }
 
         // لو مفيش شبكة شوارع محفوظة قريبة من مكاننا الحالي (أول مرة أو اتحركنا بعيد)، نجيبها في الخلفية

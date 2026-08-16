@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "915616852625",
+    "project_id": "gphaly-market",
+    "storage_bucket": "gphaly-market.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:915616852625:android:88f63698e99b1ddbbb2d30",
+        "android_client_info": {
+          "package_name": "com.mgaper.gphalymarket"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDXo5IzGTqQmCZ2L6mCtPjXaR3q93Jtfig"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:915616852625:android:bcafadfea961351dbb2d30",
+        "android_client_info": {
+          "package_name": "com.mgaper.gphalyrider"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDXo5IzGTqQmCZ2L6mCtPjXaR3q93Jtfig"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

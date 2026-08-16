@@ -194,10 +194,10 @@
         .oc-name-row{display:flex;align-items:center;gap:6px;min-width:0;flex:1;}
         .oc-name-row i{color:var(--accent);font-size:13px;width:16px;text-align:center;flex-shrink:0;}
         .oc-name-text{font-weight:800;font-size:13px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-        .oc-phone-btn{width:36px;height:36px;border-radius:50%;background:var(--accent-glow);border:1px solid var(--accent-border);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:14px;text-decoration:none;transition:.2s;flex-shrink:0;}
-        .oc-phone-btn:active{background:var(--accent);color:#000;transform:scale(.9);}
-        .oc-chat-btn{width:36px;height:36px;border-radius:50%;background:rgba(16,185,129,.14);border:1px solid rgba(16,185,129,.4);color:#10B981;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
-        .oc-chat-btn:active{background:#10B981;color:#000;transform:scale(.9);}
+        .oc-phone-btn{width:36px;height:36px;border-radius:50%;background:rgba(16,185,129,.14);border:1px solid rgba(16,185,129,.4);color:#10B981;display:flex;align-items:center;justify-content:center;font-size:14px;text-decoration:none;transition:.2s;flex-shrink:0;}
+        .oc-phone-btn:active{background:#10B981;color:#000;transform:scale(.9);}
+        .oc-chat-btn{width:36px;height:36px;border-radius:50%;background:rgba(249,115,22,.14);border:1px solid rgba(249,115,22,.4);color:#F97316;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
+        .oc-chat-btn:active{background:#F97316;color:#000;transform:scale(.9);}
 
         /* 🆕 شات المندوب والعميل - لايف فوري من غير انتظار رد الطرف التاني */
         .rc-chat-overlay{position:fixed;inset:0;z-index:6000;background:var(--bg,#0B0F19);display:none;flex-direction:column;}
@@ -219,6 +219,17 @@
         .rc-input-row input{flex:1;background:#0B0F19;border:1px solid rgba(255,255,255,.1);border-radius:999px;padding:.65rem 1rem;color:#fff;font-size:.85rem;outline:none;}
         .rc-send-btn{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#0891B2);color:#001;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;}
         .rc-send-btn:active{transform:scale(.94);}
+        .rc-typing-indicator{align-self:flex-start;display:flex;align-items:center;gap:7px;font-size:12px;color:var(--dim,#94A3B8);padding:8px 12px;background:rgba(255,255,255,.04);border-radius:14px 14px 14px 4px;}
+        .rc-typing-dots{display:flex;gap:3px;}
+        .rc-typing-dots span{width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block;animation:rcTypingBounce 1s infinite;}
+        .rc-typing-dots span:nth-child(2){animation-delay:.15s;}
+        .rc-typing-dots span:nth-child(3){animation-delay:.3s;}
+        @keyframes rcTypingBounce{0%,60%,100%{transform:translateY(0);opacity:.4;}30%{transform:translateY(-4px);opacity:1;}}
+        /* 🆕 أيقونات حالة الرسالة (بدل المثلث الأصفر): ساعة/صح/صحين */
+        .rc-bubble.me{position:relative;padding-left:1.7rem;}
+        .rc-status-icon{position:absolute;left:.55rem;bottom:.4rem;font-size:10px;color:rgba(0,17,17,.55);}
+        .rc-status-icon.rc-double{letter-spacing:-3px;padding-left:3px;font-weight:900;}
+        .rc-status-icon.rc-read{color:#0891B2;text-shadow:0 0 5px rgba(34,211,238,.9);}
 
         .oc-addr{display:flex;align-items:flex-start;gap:6px;margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.05);}
         .oc-addr i{color:var(--danger);font-size:13px;margin-top:2px;flex-shrink:0;width:16px;text-align:center;}
@@ -591,9 +602,10 @@
         <a href="#" id="rc-chat-call-btn" class="rc-call-btn"><i class="fa-solid fa-phone"></i></a>
     </div>
     <div class="rc-chat-body" id="rc-chat-body"></div>
+    <div id="rc-typing-indicator" class="rc-typing-indicator" style="display:none;margin:0 1rem 0.4rem;"><span>بيكتب الآن</span><div class="rc-typing-dots"><span></span><span></span><span></span></div></div>
     <div class="rc-quick-bar" id="rc-quick-bar"></div>
     <div class="rc-input-row">
-        <input type="text" id="rc-chat-input" placeholder="اكتب رسالتك..." onkeydown="if(event.key==='Enter'){sendRCChat();}">
+        <input type="text" id="rc-chat-input" placeholder="اكتب رسالتك..." oninput="notifyRCTyping()" onkeydown="if(event.key==='Enter'){sendRCChat();}">
         <button type="button" class="rc-send-btn" onclick="sendRCChat()"><i class="fa-solid fa-paper-plane"></i></button>
     </div>
 </div>
@@ -769,7 +781,7 @@
 </div>
 
 <script>
-var GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbza-0LuFadZUE_SeDoSFwPFjtKJT25nLbXThtA6TOb6m2BVc3YdLz1gUCUwwG4NJ8zk7w/exec";
+var GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzkdXBrSz8xdc2YhM3zCsmcodpFp9CahvM7aNaJMGewDW2eNAYE_h6Uzng2j16p08_G/exec";
 var APP_VERSION = "3.0.1"; // لازم يطابق قيمة الخلية D2 في الشيت، وإلا هيظهر تحديث إجباري
 
 // ⚡ عزل بيانات كل طيار عن التاني على نفس الجهاز: كل بيانات الطيار (أرباح/سجل/طلبات...) بتتخزن
@@ -857,28 +869,44 @@ var rcChatBon = null;
 var rcChatMessages = [];
 var rcChatPollTimer = null;
 var rcChatFingerprint = '';
+var rcTypingPollTimer = null;
+var rcTypingHeartbeat = null;
+var rcLastTypingSentAt = 0;
+// 🆕 نظام حالة الرسايل (زي واتساب): ساعة = بتتبعت/بتستنى نت. صح واحدة = وصلت
+// للسيرفر. صحين رمادي = جهاز العميل جابها فعليًا. صحين فسفوري سماوي = شاشة
+// الشات كانت فاتحة عنده وشافها فعلاً.
+var rcPendingMessages = []; // [{clientId, text, confirmed}] - لحد ما تظهر في رسايل السيرفر
+var rcOtherStatus = { seenRow: 0, readRow: 0 }; // حالة آخر رسالة شافها/قراها العميل من رسايلي أنا
 
 function openRCChat(bon, custName, custPhone) {
     rcChatBon = bon;
     rcChatMessages = [];
     rcChatFingerprint = '';
+    rcPendingMessages = [];
+    rcOtherStatus = { seenRow: 0, readRow: 0 };
     var titleEl = document.getElementById('rc-chat-title');
     if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-user ml-1"></i>' + escHtml(custName || 'العميل');
     var callBtn = document.getElementById('rc-chat-call-btn');
     if (callBtn) callBtn.href = custPhone ? ('tel:' + custPhone) : '#';
     var input = document.getElementById('rc-chat-input'); if (input) input.value = '';
+    var typingEl = document.getElementById('rc-typing-indicator'); if (typingEl) typingEl.style.display = 'none';
     renderRCQuickBar();
     renderRCChatBody();
     var overlay = document.getElementById('rc-chat-overlay'); if (overlay) overlay.classList.add('show');
     startRCChatPoll();
+    startRCTypingPoll();
 }
 function closeRCChat() {
     stopRCChatPoll();
+    stopRCTypingPoll();
+    notifyRCStoppedTyping();
     rcChatBon = null;
     var overlay = document.getElementById('rc-chat-overlay'); if (overlay) overlay.classList.remove('show');
 }
 function startRCChatPoll() { stopRCChatPoll(); fetchRCChat(); rcChatPollTimer = setInterval(fetchRCChat, 3000); }
 function stopRCChatPoll() { if (rcChatPollTimer) { clearInterval(rcChatPollTimer); rcChatPollTimer = null; } }
+function startRCTypingPoll() { stopRCTypingPoll(); pollRCTypingStatus(); pollRCMessageStatus(); rcTypingPollTimer = setInterval(function () { pollRCTypingStatus(); pollRCMessageStatus(); }, 2500); }
+function stopRCTypingPoll() { if (rcTypingPollTimer) { clearInterval(rcTypingPollTimer); rcTypingPollTimer = null; } if (rcTypingHeartbeat) { clearInterval(rcTypingHeartbeat); rcTypingHeartbeat = null; } }
 
 function fetchRCChat() {
     if (!rcChatBon) return;
@@ -888,8 +916,79 @@ function fetchRCChat() {
             var data; try { data = JSON.parse(text); } catch (e) { data = null; }
             var msgs = (data && Array.isArray(data.messages)) ? data.messages : [];
             var fp = JSON.stringify(msgs);
-            if (fp !== rcChatFingerprint) { rcChatFingerprint = fp; rcChatMessages = msgs; renderRCChatBody(); }
+            if (fp !== rcChatFingerprint) {
+                rcChatFingerprint = fp; rcChatMessages = msgs;
+                reconcileRCPending();
+                renderRCChatBody();
+            }
+            // 🆕 جهازي فعليًا جاب الرسايل دلوقتي - "وصلت"، وبرضو "اتشافت" لو
+            // شاشة الشات فعلاً ظاهرة قدامي دلوقتي (مش في الخلفية)
+            if (msgs.length) {
+                var maxRow = 0; for (var i = 0; i < msgs.length; i++) { if ((msgs[i].row || 0) > maxRow) maxRow = msgs[i].row; }
+                var body = JSON.stringify({ action: (document.hidden ? 'markRCSeen' : 'markRCRead'), bon: rcChatBon, role: 'rider', uptoRow: maxRow });
+                fetch(GOOGLE_SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body, redirect: 'follow' }).catch(function () {});
+            }
         }).catch(function () {});
+}
+
+// 🆕 بتشيل الرسالة المعلّقة بس لما تظهر فعليًا في رسايل السيرفر (بعد التأكد إنها
+// اتبعتت)، بدل ما تتشال فورًا لحظة نجاح الإرسال - ده بيمنع فليكر لو السيرفر
+// متأخر شوية يرجّعها في نفس دورة الجلب
+function reconcileRCPending() {
+    if (!rcPendingMessages.length) return;
+    rcPendingMessages = rcPendingMessages.filter(function (pm) {
+        if (!pm.confirmed) return true;
+        var foundInServer = rcChatMessages.some(function (m) { return m.sender === 'rider' && m.text === pm.text; });
+        return !foundInServer;
+    });
+}
+
+// 🆕 مؤشر "العميل بيكتب الآن" - نفس فكرة الدعم الفني اللايف بالظبط
+function pollRCTypingStatus() {
+    if (!rcChatBon) return;
+    fetch(GOOGLE_SCRIPT_URL + '?action=getRCTypingStatus&bon=' + encodeURIComponent(rcChatBon), { redirect: 'follow' })
+        .then(function (r) { return r.text(); }).then(function (text) {
+            if (!rcChatBon) return;
+            var data; try { data = JSON.parse(text); } catch (e) { data = null; }
+            var el = document.getElementById('rc-typing-indicator');
+            if (el) el.style.display = (data && data.customer) ? 'flex' : 'none';
+        }).catch(function () {});
+}
+// 🆕 حالة رسايلي أنا (وصلت/اتشافت عند العميل) - بتحدّث علامات الصح
+function pollRCMessageStatus() {
+    if (!rcChatBon) return;
+    fetch(GOOGLE_SCRIPT_URL + '?action=getRCMessageStatus&bon=' + encodeURIComponent(rcChatBon), { redirect: 'follow' })
+        .then(function (r) { return r.text(); }).then(function (text) {
+            if (!rcChatBon) return;
+            var data; try { data = JSON.parse(text); } catch (e) { data = null; }
+            if (!data) return;
+            var next = { seenRow: data.customerSeenRow || 0, readRow: data.customerReadRow || 0 };
+            if (next.seenRow !== rcOtherStatus.seenRow || next.readRow !== rcOtherStatus.readRow) {
+                rcOtherStatus = next; renderRCChatBody();
+            }
+        }).catch(function () {});
+}
+// بيتبعت بمعدل مرة كل 1.2 ثانية بس (مش كل حرف) لما المندوب يكتب
+function notifyRCTyping() {
+    if (!rcChatBon) return;
+    var input = document.getElementById('rc-chat-input');
+    if (!rcTypingHeartbeat) {
+        rcTypingHeartbeat = setInterval(function () {
+            var el = document.getElementById('rc-chat-input');
+            if (!el) { clearInterval(rcTypingHeartbeat); rcTypingHeartbeat = null; return; }
+            if (el.value.trim().length > 0) sendRCTypingPing(false); else notifyRCStoppedTyping();
+        }, 1500);
+    }
+    if (input && !input.value.trim()) { notifyRCStoppedTyping(); return; }
+    var now = Date.now();
+    if (now - rcLastTypingSentAt < 1200) return;
+    sendRCTypingPing(false);
+}
+function notifyRCStoppedTyping() { if (rcChatBon) sendRCTypingPing(true); }
+function sendRCTypingPing(stop) {
+    rcLastTypingSentAt = Date.now();
+    var body = JSON.stringify({ action: 'setRCTypingStatus', bon: rcChatBon, role: 'rider', stop: !!stop });
+    fetch(GOOGLE_SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body, redirect: 'follow' }).catch(function () {});
 }
 
 function renderRCQuickBar() {
@@ -901,16 +1000,38 @@ function renderRCQuickBar() {
     bar.innerHTML = html;
 }
 
+// 🆕 أيقونة حالة الرسالة (بدل المثلث الأصفر القديم): ساعة وقت الإرسال، صح واحدة
+// لما تتأكد إنها وصلت للسيرفر، صحين رمادي لما جهاز العميل يجيبها فعليًا، صحين
+// فسفوري سماوي لما شاشة شاته تكون فاتحة وشافها فعلاً
+function rcStatusIconHtml(status) {
+    if (status === 'sending') return '<i class="fa-solid fa-clock rc-status-icon" title="بتتبعت..."></i>';
+    if (status === 'sent') return '<i class="fa-solid fa-check rc-status-icon" title="اتبعتت"></i>';
+    if (status === 'delivered') return '<span class="rc-status-icon rc-double" title="وصلت">✓✓</span>';
+    if (status === 'read') return '<span class="rc-status-icon rc-double rc-read" title="اتشافت">✓✓</span>';
+    return '';
+}
+function rcStatusForRow(row) {
+    if (row <= rcOtherStatus.readRow) return 'read';
+    if (row <= rcOtherStatus.seenRow) return 'delivered';
+    return 'sent';
+}
+
 function renderRCChatBody() {
     var box = document.getElementById('rc-chat-body'); if (!box) return;
-    if (!rcChatMessages.length) {
+    var totalCount = rcChatMessages.length + rcPendingMessages.length;
+    if (!totalCount) {
         box.innerHTML = '<div class="rc-empty-hint"><i class="fa-solid fa-comments" style="font-size:1.8rem;display:block;margin-bottom:0.5rem;"></i>ابدأ المحادثة مع العميل</div>';
         return;
     }
     var html = '';
     for (var i = 0; i < rcChatMessages.length; i++) {
         var m = rcChatMessages[i];
-        html += '<div class="rc-bubble ' + (m.sender === 'rider' ? 'me' : 'them') + '">' + escHtml(m.text) + '</div>';
+        var statusHtml = (m.sender === 'rider') ? rcStatusIconHtml(rcStatusForRow(m.row || 0)) : '';
+        html += '<div class="rc-bubble ' + (m.sender === 'rider' ? 'me' : 'them') + '">' + escHtml(m.text) + statusHtml + '</div>';
+    }
+    for (var j = 0; j < rcPendingMessages.length; j++) {
+        var pm = rcPendingMessages[j];
+        html += '<div class="rc-bubble me">' + escHtml(pm.text) + rcStatusIconHtml(pm.confirmed ? 'sent' : 'sending') + '</div>';
     }
     box.innerHTML = html;
     box.scrollTop = box.scrollHeight;
@@ -923,12 +1044,15 @@ function sendRCChat(quickText) {
     var text = (quickText !== undefined ? quickText : (input ? input.value.trim() : ''));
     if (!text) return;
     if (input && quickText === undefined) input.value = '';
-    // 🆕 إضافة فورية على الشاشة (Optimistic) عشان الإرسال يبان لحظي، من غير ما نستنى رد السيرفر
-    rcChatMessages.push({ sender: 'rider', text: text });
+    notifyRCStoppedTyping();
+    // 🆕 إضافة فورية على الشاشة (Optimistic) عشان الإرسال يبان لحظي - بتبدأ بأيقونة الساعة
+    var pmObj = { clientId: 'c' + Date.now() + Math.random(), text: text, confirmed: false };
+    rcPendingMessages.push(pmObj);
     renderRCChatBody();
     var body = JSON.stringify({ action: 'sendRiderCustomerMessage', bon: rcChatBon, sender: 'rider', message: text });
     fetch(GOOGLE_SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body, redirect: 'follow' })
-        .then(function () { fetchRCChat(); }).catch(function () {});
+        .then(function () { pmObj.confirmed = true; renderRCChatBody(); fetchRCChat(); })
+        .catch(function () { /* لسه ساعة - هتتأكد لما النت يرجع في دورة الجلب الجاية */ });
 }
 
 

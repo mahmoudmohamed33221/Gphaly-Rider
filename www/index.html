@@ -204,7 +204,9 @@
         .rc-chat-overlay.show{display:flex;}
         .rc-chat-header{display:flex;align-items:center;gap:.75rem;padding:.9rem 1rem;border-bottom:1px solid rgba(255,255,255,.08);background:#111827;flex-shrink:0;}
         .rc-chat-header .rc-back-btn{color:var(--accent);font-size:1.1rem;flex-shrink:0;background:none;border:none;}
-        .rc-chat-header .rc-title{font-weight:800;font-size:.95rem;color:#fff;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+        .rc-chat-header .rc-title{font-weight:800;font-size:.9rem;color:#fff;flex:1;min-width:0;}
+        .rc-chat-header .rc-title .rc-title-line1{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+        .rc-chat-header .rc-title .rc-title-line2{font-size:.75rem;font-weight:600;color:var(--dim,#94A3B8);margin-top:2px;display:flex;align-items:center;gap:4px;}
         .rc-chat-header .rc-call-btn{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#10B981,#059669);color:#fff;display:flex;align-items:center;justify-content:center;font-size:.9rem;flex-shrink:0;}
         .rc-chat-body{flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:.6rem;}
         .rc-bubble{max-width:78%;padding:.55rem .9rem;border-radius:1.1rem;font-size:.85rem;line-height:1.45;word-break:break-word;}
@@ -781,7 +783,7 @@
 </div>
 
 <script>
-var GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzkdXBrSz8xdc2YhM3zCsmcodpFp9CahvM7aNaJMGewDW2eNAYE_h6Uzng2j16p08_G/exec";
+var GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyeCHmyjYBF8EZULzd0F6V8JeuGrRxAF-kjjG5jGwyksvWr6ePP1YAYBJOKWwUNuefMKQ/exec";
 var APP_VERSION = "3.0.1"; // لازم يطابق قيمة الخلية D2 في الشيت، وإلا هيظهر تحديث إجباري
 
 // ⚡ عزل بيانات كل طيار عن التاني على نفس الجهاز: كل بيانات الطيار (أرباح/سجل/طلبات...) بتتخزن
@@ -885,7 +887,7 @@ function openRCChat(bon, custName, custPhone) {
     rcPendingMessages = [];
     rcOtherStatus = { seenRow: 0, readRow: 0 };
     var titleEl = document.getElementById('rc-chat-title');
-    if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-user ml-1"></i>' + escHtml(custName || 'العميل');
+    if (titleEl) titleEl.innerHTML = '<div class="rc-title-line1"><i class="fa-solid fa-user ml-1"></i>العميل: ' + escHtml(custName || 'العميل') + '</div><div class="rc-title-line2"><i class="fa-solid fa-receipt"></i>رقم البون: #' + bon + '</div>';
     var callBtn = document.getElementById('rc-chat-call-btn');
     if (callBtn) callBtn.href = custPhone ? ('tel:' + custPhone) : '#';
     var input = document.getElementById('rc-chat-input'); if (input) input.value = '';
@@ -4558,9 +4560,126 @@ function manualRefresh() {
         .finally(function() { var btn = document.getElementById('refBtn'); if (btn) btn.classList.remove('spin'); });
 }
 
+/* ================================================================
+   🆕 نظام الإشعارات اللحظية (Push Notifications) - نفس آلية تطبيق جبهالي
+   ماركت بالظبط. بيشتغل حتى لو التطبيق قافل تمامًا لأن نظام التشغيل نفسه هو
+   اللي بيستقبل الإشعار من جوجل مش التطبيق. بمجرد ما الطيار يسجّل دخول
+   ويدّي صلاحية الإشعارات، بناخد "توكن" مميز لجهازه ونبعته للسيرفر مربوط
+   برقم تليفونه، عشان لما يوصله طلب جديد أو رسالة من عميل يقدر السيرفر
+   يبعتله إشعار على الجهاز ده تحديدًا.
+   ================================================================ */
+function getPilotPhoneForPush() {
+    try {
+        var p = JSON.parse(localStorage.getItem('gebhaly_pilot_full_data'));
+        if (p && p.phone) return p.phone;
+    } catch (e) {}
+    return '';
+}
+
+function pushDebugLogRider(step, details) {
+    try {
+        var log = JSON.parse(localStorage.getItem('push_debug_log') || '[]');
+        log.push({ t: new Date().toLocaleTimeString('ar-EG'), step: step, details: details });
+        while (log.length > 40) log.shift();
+        localStorage.setItem('push_debug_log', JSON.stringify(log));
+    } catch (e) {}
+}
+
+async function registerPushNotifications() {
+    pushDebugLogRider('start', {});
+    if (!(window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.PushNotifications)) {
+        pushDebugLogRider('plugin_not_found', {});
+        return; // مش شغال جوه تطبيق أندرويد فعلي، أو البلجن مش متربط في الـ APK
+    }
+    pushDebugLogRider('plugin_found', {});
+    var push = Capacitor.Plugins.PushNotifications;
+    try {
+        var status = await push.checkPermissions();
+        pushDebugLogRider('checkPermissions', status);
+        if (status.receive === 'prompt' || status.receive === 'prompt-with-rationale') {
+            status = await push.requestPermissions();
+            pushDebugLogRider('requestPermissions', status);
+        }
+        if (status.receive !== 'granted') { pushDebugLogRider('permission_denied', status); return; }
+
+        // 🆕 نفس القناة "orders_v3" بالظبط زي الماركت - كل تطبيق (APK) بيدير
+        // قنواته لوحده على الجهاز، فلازم تتعمل هنا برضو مش مشتركة تلقائيًا
+        try {
+            try { await push.deleteChannel({ id: 'orders' }); } catch (delErr) {}
+            try { await push.deleteChannel({ id: 'orders_v2' }); } catch (delErr) {}
+            await push.createChannel({
+                id: 'orders_v3',
+                name: 'إشعارات الطلبات والرسايل',
+                description: 'إشعارات الطلبات الجديدة ورسايل العملاء',
+                importance: 5, // IMPORTANCE_HIGH - إشعار منبثق (heads-up) + صوت، حتى لو البرنامج مقفول
+                visibility: 1,
+                sound: 'default',
+                vibration: true,
+                lights: true
+            });
+            pushDebugLogRider('channel_created', { id: 'orders_v3' });
+        } catch (chErr) {
+            pushDebugLogRider('channel_create_error', { message: chErr.message || String(chErr) });
+        }
+
+        push.removeAllListeners();
+        push.addListener('registration', function (token) {
+            pushDebugLogRider('registration_success', { token: token.value ? token.value.substring(0, 20) + '...' : '' });
+            sendRiderPushTokenToServer(token.value);
+        });
+        push.addListener('registrationError', function (err) {
+            pushDebugLogRider('registration_error', err);
+        });
+        push.addListener('pushNotificationReceived', function () {
+            // التطبيق فاتح والإشعار وصل - نحدّث البيانات على طول من غير ما ننتظر الفحص الدوري
+            Promise.all([fetchOrders(), fetchInboxMessages()]);
+        });
+        push.addListener('pushNotificationActionPerformed', function () {
+            // الطيار دوس على الإشعار من قائمة الإشعارات - نحدّث البيانات فورًا
+            Promise.all([fetchOrders(), fetchInboxMessages()]);
+        });
+
+        await push.register();
+        pushDebugLogRider('register_called', {});
+    } catch (e) { pushDebugLogRider('exception', { message: e.message || String(e) }); }
+}
+
+var lastReceivedRiderPushToken = null;
+var lastSentRiderPushToken = null;
+function sendRiderPushTokenToServer(token, attempt) {
+    attempt = attempt || 1;
+    if (token) lastReceivedRiderPushToken = token;
+    var tokenToSend = token || lastReceivedRiderPushToken;
+    var phone = getPilotPhoneForPush();
+    pushDebugLogRider('sendRiderPushTokenToServer_called', { hasPhone: !!phone, hasToken: !!tokenToSend, alreadySent: tokenToSend === lastSentRiderPushToken, attempt: attempt });
+    if (!phone || !tokenToSend || (tokenToSend === lastSentRiderPushToken && attempt === 1)) return;
+    var body = JSON.stringify({ action: 'registerRiderPushToken', phone: phone, token: tokenToSend });
+    fetch(GOOGLE_SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body, redirect: 'follow' })
+        .then(function (r) { return r.text(); })
+        .then(function (txt) {
+            lastSentRiderPushToken = tokenToSend;
+            pushDebugLogRider('sendRiderPushTokenToServer_response', { text: txt.substring(0, 100) });
+        })
+        .catch(function (err) {
+            pushDebugLogRider('sendRiderPushTokenToServer_FAILED', { message: err.message || String(err), attempt: attempt });
+            if (attempt < 5) {
+                setTimeout(function () { sendRiderPushTokenToServer(tokenToSend, attempt + 1); }, attempt * 3000);
+            }
+        });
+}
+// 🆕 محاولة دورية بدون سقف - لو التوكن لسه ما اتبعتش (فشلت أول 5 محاولات وقت
+// فتح التطبيق بسبب نت لسه بيتوثق مثلاً)، الفحص ده هيكمل يحاول كل 20 ثانية
+setInterval(function () {
+    if (lastReceivedRiderPushToken && lastReceivedRiderPushToken !== lastSentRiderPushToken) {
+        pushDebugLogRider('sendRiderPushTokenToServer_periodic_retry', {});
+        sendRiderPushTokenToServer(lastReceivedRiderPushToken, 1);
+    }
+}, 20000);
+
 function init() {
     buildNav();
     migrateOldDoneOrdersToHistoryOnce();
+    registerPushNotifications(); // 🆕 تسجيل توكن إشعارات الطيار - بعد ما نتأكد إن رقم تليفونه معروف (بعد تسجيل الدخول)
     runMandatoryPermissionGate(); // 🆕 بوابة GPS/الموقع الإجبارية - أول حاجة تحصل قبل أي حاجة تانية
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') { silentPermissionRecheck(); } });
     if (mgIntervalId) clearInterval(mgIntervalId);

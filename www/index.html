@@ -231,7 +231,14 @@
         .rc-bubble.me{position:relative;padding-left:1.7rem;}
         .rc-status-icon{position:absolute;left:.55rem;bottom:.4rem;font-size:10px;color:rgba(0,17,17,.55);}
         .rc-status-icon.rc-double{letter-spacing:-3px;padding-left:3px;font-weight:900;}
+        .rc-status-icon.rc-triple{letter-spacing:-3px;padding-left:3px;font-weight:900;}
         .rc-status-icon.rc-read{color:#0891B2;text-shadow:0 0 5px rgba(34,211,238,.9);}
+        .rc-msg-time{font-size:9px;color:rgba(0,17,17,.5);margin-top:2px;text-align:left;}
+        .rc-bubble.them .rc-msg-time{color:var(--dim,#94A3B8);}
+        .rc-unread-badge{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;border-radius:999px;background:#EF4444;color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid #0B0F19;}
+        /* 🆕 وميض الكارت لما نيجي منه من إشعار "طلب جديد" - يلفت النظر له بسرعة */
+        @keyframes rcCardBlink { 0%, 100% { background: transparent; } 50% { background: rgba(250,204,21,.35); } }
+        .rc-blink-highlight { animation: rcCardBlink .5s ease-in-out 5; }
 
         .oc-addr{display:flex;align-items:flex-start;gap:6px;margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.05);}
         .oc-addr i{color:var(--danger);font-size:13px;margin-top:2px;flex-shrink:0;width:16px;text-align:center;}
@@ -607,7 +614,7 @@
     <div id="rc-typing-indicator" class="rc-typing-indicator" style="display:none;margin:0 1rem 0.4rem;"><span>بيكتب الآن</span><div class="rc-typing-dots"><span></span><span></span><span></span></div></div>
     <div class="rc-quick-bar" id="rc-quick-bar"></div>
     <div class="rc-input-row">
-        <input type="text" id="rc-chat-input" placeholder="اكتب رسالتك..." oninput="notifyRCTyping()" onkeydown="if(event.key==='Enter'){sendRCChat();}">
+        <input type="text" id="rc-chat-input" placeholder="اكتب رسالتك..." oninput="notifyRCTyping()" onkeydown="if(event.key==='Enter' && !event.isComposing){event.preventDefault();sendRCChat();}">
         <button type="button" class="rc-send-btn" onclick="sendRCChat()"><i class="fa-solid fa-paper-plane"></i></button>
     </div>
 </div>
@@ -878,14 +885,54 @@ var rcLastTypingSentAt = 0;
 // للسيرفر. صحين رمادي = جهاز العميل جابها فعليًا. صحين فسفوري سماوي = شاشة
 // الشات كانت فاتحة عنده وشافها فعلاً.
 var rcPendingMessages = []; // [{clientId, text, confirmed}] - لحد ما تظهر في رسايل السيرفر
-var rcOtherStatus = { seenRow: 0, readRow: 0 }; // حالة آخر رسالة شافها/قراها العميل من رسايلي أنا
+var rcOtherStatus = { seenRow: 0, readRow: 0, notifiedRow: 0 }; // حالة آخر رسالة شافها/قراها العميل من رسايلي أنا
+var rcOtherOnline = false; // 🆕 العميل فاتح البرنامج بشكل عام دلوقتي؟ (مش شرط جوه الشات بالذات)
+var rcOtherPhone = ''; // 🆕 تليفون العميل - أساس فحص "الحضور" العام بتاعه
+// 🆕 عداد الرسايل الجديدة الغير مقروءة لكل بون - بيزيد لما إشعار رسالة جديدة
+// يوصل والشات مقفول، وبيتصفر تمامًا لما الطيار يفتح شات الطلب ده بالذات
+var rcUnreadCounts = {};
+function renderRCUnreadBadge() {
+    Object.keys(rcUnreadCounts).forEach(function (bon) {
+        var el = document.getElementById('rc-badge-' + bon);
+        if (!el) return;
+        var count = rcUnreadCounts[bon] || 0;
+        if (count > 0) { el.textContent = count > 9 ? '9+' : count; el.style.display = 'flex'; }
+        else { el.style.display = 'none'; }
+    });
+}
+// 🆕 فتح شات طلب معيّن مباشرة بالبون بس (من إشعار الرسالة) - بيدور على بيانات
+// العميل من allOrders المحمّلة أصلاً في الذاكرة
+function openRCChatForBon(bon) {
+    var order = null;
+    for (var i = 0; i < allOrders.length; i++) { if (Number(allOrders[i].bon) === Number(bon)) { order = allOrders[i]; break; } }
+    if (order) {
+        var phase = getOrderPhase(order);
+        if (phase && phase !== 'map' && phase !== 'delivered') switchTab(phase);
+        setTimeout(function () { openRCChat(order.bon, order.name || 'العميل', order.phone || ''); }, 400);
+    }
+}
+// 🆕 وميض كارت طلب معيّن 5 مرات - بيتنادى لما الطيار يدوس على إشعار "طلب جديد"
+function blinkOrderCard(bon) {
+    switchTab('new');
+    setTimeout(function () {
+        var el = document.getElementById('card-bon-' + bon);
+        if (!el) return;
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('rc-blink-highlight');
+        setTimeout(function () { el.classList.remove('rc-blink-highlight'); }, 2600); // 5 دورات × 0.5 ثانية
+    }, 400);
+}
 
 function openRCChat(bon, custName, custPhone) {
     rcChatBon = bon;
     rcChatMessages = [];
     rcChatFingerprint = '';
     rcPendingMessages = [];
-    rcOtherStatus = { seenRow: 0, readRow: 0 };
+    rcOtherStatus = { seenRow: 0, readRow: 0, notifiedRow: 0 };
+    rcOtherOnline = false;
+    rcOtherPhone = custPhone || '';
+    // 🆕 دخل الشات ده بالذات - نصفّر عداد الرسايل الجديدة بتاعه فورًا
+    rcUnreadCounts[bon] = 0; renderRCUnreadBadge();
     var titleEl = document.getElementById('rc-chat-title');
     if (titleEl) titleEl.innerHTML = '<div class="rc-title-line1"><i class="fa-solid fa-user ml-1"></i>العميل: ' + escHtml(custName || 'العميل') + '</div><div class="rc-title-line2"><i class="fa-solid fa-receipt"></i>رقم البون: #' + bon + '</div>';
     var callBtn = document.getElementById('rc-chat-call-btn');
@@ -956,7 +1003,8 @@ function pollRCTypingStatus() {
             if (el) el.style.display = (data && data.customer) ? 'flex' : 'none';
         }).catch(function () {});
 }
-// 🆕 حالة رسايلي أنا (وصلت/اتشافت عند العميل) - بتحدّث علامات الصح
+// 🆕 حالة رسايلي أنا (اتشافت عند العميل - فتح الشات بالذات) + "العميل فاتح
+// البرنامج بشكل عام دلوقتي؟" (أساس الصحين الرمادي الجديد) - بتحدّث علامات الصح
 function pollRCMessageStatus() {
     if (!rcChatBon) return;
     fetch(GOOGLE_SCRIPT_URL + '?action=getRCMessageStatus&bon=' + encodeURIComponent(rcChatBon), { redirect: 'follow' })
@@ -964,11 +1012,37 @@ function pollRCMessageStatus() {
             if (!rcChatBon) return;
             var data; try { data = JSON.parse(text); } catch (e) { data = null; }
             if (!data) return;
-            var next = { seenRow: data.customerSeenRow || 0, readRow: data.customerReadRow || 0 };
-            if (next.seenRow !== rcOtherStatus.seenRow || next.readRow !== rcOtherStatus.readRow) {
+            var next = { seenRow: data.customerSeenRow || 0, readRow: data.customerReadRow || 0, notifiedRow: data.customerNotifiedRow || 0 };
+            if (next.seenRow !== rcOtherStatus.seenRow || next.readRow !== rcOtherStatus.readRow || next.notifiedRow !== rcOtherStatus.notifiedRow) {
                 rcOtherStatus = next; renderRCChatBody();
             }
         }).catch(function () {});
+    if (rcOtherPhone) {
+        fetch(GOOGLE_SCRIPT_URL + '?action=getPresence&role=customer&identifier=' + encodeURIComponent(rcOtherPhone), { redirect: 'follow' })
+            .then(function (r) { return r.text(); }).then(function (text) {
+                if (!rcChatBon) return;
+                var data; try { data = JSON.parse(text); } catch (e) { data = null; }
+                var online = !!(data && data.online);
+                if (online !== rcOtherOnline) { rcOtherOnline = online; renderRCChatBody(); }
+            }).catch(function () {});
+    }
+}
+// 🆕 نبضة حضور عامة - بتتبعت كل ما التطبيق يكون ظاهر على الشاشة، بغض النظر عن
+// كون شاشة الشات مفتوحة أو لأ (أي شاشة في التطبيق). دي بتخلي العميل يشوف
+// "صحين رمادي" على رسايله للطيار طول ما البرنامج فاتح عنده، مش شرط فاتح الشات
+var rcPresenceHeartbeatTimer = null;
+function startRCPresenceHeartbeat() {
+    if (rcPresenceHeartbeatTimer) return;
+    sendRCPresencePing();
+    rcPresenceHeartbeatTimer = setInterval(sendRCPresencePing, 15000);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) sendRCPresencePing(); });
+}
+function sendRCPresencePing() {
+    if (document.hidden) return;
+    var phone = getPilotPhoneForPush();
+    if (!phone) return;
+    var body = JSON.stringify({ action: 'setPresence', role: 'rider', identifier: phone });
+    fetch(GOOGLE_SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body, redirect: 'follow' }).catch(function () {});
 }
 // بيتبعت بمعدل مرة كل 1.2 ثانية بس (مش كل حرف) لما المندوب يكتب
 function notifyRCTyping() {
@@ -1002,19 +1076,32 @@ function renderRCQuickBar() {
     bar.innerHTML = html;
 }
 
-// 🆕 أيقونة حالة الرسالة (بدل المثلث الأصفر القديم): ساعة وقت الإرسال، صح واحدة
-// لما تتأكد إنها وصلت للسيرفر، صحين رمادي لما جهاز العميل يجيبها فعليًا، صحين
-// فسفوري سماوي لما شاشة شاته تكون فاتحة وشافها فعلاً
+// 🆕 نظام العلامات الكامل (5 مستويات): ساعة → صح واحدة (وصلت للسيرفر) → صحين
+// رمادي (اتأكد وصولها فعليًا لتليفون العميل كإشعار - best effort) → 3 صح
+// رمادي (العميل فاتح البرنامج بشكل عام) → 3 صح فسفوري سماوي (فاتح الشات
+// بالذات وشاف الرسالة). بيتحط تحتها وقت الإرسال زي واتساب.
 function rcStatusIconHtml(status) {
     if (status === 'sending') return '<i class="fa-solid fa-clock rc-status-icon" title="بتتبعت..."></i>';
-    if (status === 'sent') return '<i class="fa-solid fa-check rc-status-icon" title="اتبعتت"></i>';
-    if (status === 'delivered') return '<span class="rc-status-icon rc-double" title="وصلت">✓✓</span>';
-    if (status === 'read') return '<span class="rc-status-icon rc-double rc-read" title="اتشافت">✓✓</span>';
+    if (status === 'sent') return '<span class="rc-status-icon" title="اتبعتت للسيرفر">✓</span>';
+    if (status === 'notified') return '<span class="rc-status-icon rc-double" title="وصلت لتليفونه">✓✓</span>';
+    if (status === 'opened') return '<span class="rc-status-icon rc-triple" title="فاتح البرنامج">✓✓✓</span>';
+    if (status === 'read') return '<span class="rc-status-icon rc-triple rc-read" title="شاف الرسالة">✓✓✓</span>';
     return '';
 }
+function rcTimeHtml(ts) {
+    if (!ts) return '';
+    var d = new Date(ts);
+    var h = d.getHours(), m = d.getMinutes();
+    var h12 = h % 12 === 0 ? 12 : h % 12;
+    var ampm = h < 12 ? 'ص' : 'م';
+    return '<div class="rc-msg-time">' + h12 + ':' + (m < 10 ? '0' + m : m) + ' ' + ampm + '</div>';
+}
+// 🔧 صحين رمادي = اتأكد وصولها فعليًا كإشعار لتليفونه. 3 صح رمادي = فاتح
+// البرنامج بشكل عام (مش شرط جوه الشات). 3 صح فسفوري = فاتح الشات بالذات وشاف الرسالة دي.
 function rcStatusForRow(row) {
     if (row <= rcOtherStatus.readRow) return 'read';
-    if (row <= rcOtherStatus.seenRow) return 'delivered';
+    if (rcOtherOnline || row <= rcOtherStatus.seenRow) return 'opened';
+    if (row <= rcOtherStatus.notifiedRow) return 'notified';
     return 'sent';
 }
 
@@ -1029,26 +1116,34 @@ function renderRCChatBody() {
     for (var i = 0; i < rcChatMessages.length; i++) {
         var m = rcChatMessages[i];
         var statusHtml = (m.sender === 'rider') ? rcStatusIconHtml(rcStatusForRow(m.row || 0)) : '';
-        html += '<div class="rc-bubble ' + (m.sender === 'rider' ? 'me' : 'them') + '">' + escHtml(m.text) + statusHtml + '</div>';
+        html += '<div class="rc-bubble ' + (m.sender === 'rider' ? 'me' : 'them') + '">' + escHtml(m.text) + statusHtml + rcTimeHtml(m.ts) + '</div>';
     }
     for (var j = 0; j < rcPendingMessages.length; j++) {
         var pm = rcPendingMessages[j];
-        html += '<div class="rc-bubble me">' + escHtml(pm.text) + rcStatusIconHtml(pm.confirmed ? 'sent' : 'sending') + '</div>';
+        html += '<div class="rc-bubble me">' + escHtml(pm.text) + rcStatusIconHtml(pm.confirmed ? 'sent' : 'sending') + rcTimeHtml(pm.ts) + '</div>';
     }
     box.innerHTML = html;
     box.scrollTop = box.scrollHeight;
 }
 
 // نص اختياري (من زرار رسالة جاهزة) وإلا بياخد من مربع الكتابة
+var rcLastSentText = '';
+var rcLastSentAt = 0;
 function sendRCChat(quickText) {
     if (!rcChatBon) return;
     var input = document.getElementById('rc-chat-input');
     var text = (quickText !== undefined ? quickText : (input ? input.value.trim() : ''));
     if (!text) return;
+    // 🔧 حارس ضد الإرسال المزدوج (سبب مشكلة "الرسالة بتتبعت مرتين"): بعض
+    // كيبوردات الموبايل بتطلق حدث Enter مرتين قريبين من بعض - لو نفس النص
+    // اتبعت خلال أقل من ثانية، نتجاهل المحاولة التانية
+    var now = Date.now();
+    if (text === rcLastSentText && (now - rcLastSentAt) < 1000) return;
+    rcLastSentText = text; rcLastSentAt = now;
     if (input && quickText === undefined) input.value = '';
     notifyRCStoppedTyping();
     // 🆕 إضافة فورية على الشاشة (Optimistic) عشان الإرسال يبان لحظي - بتبدأ بأيقونة الساعة
-    var pmObj = { clientId: 'c' + Date.now() + Math.random(), text: text, confirmed: false };
+    var pmObj = { clientId: 'c' + Date.now() + Math.random(), text: text, confirmed: false, ts: Date.now() };
     rcPendingMessages.push(pmObj);
     renderRCChatBody();
     var body = JSON.stringify({ action: 'sendRiderCustomerMessage', bon: rcChatBon, sender: 'rider', message: text });
@@ -1558,6 +1653,7 @@ function renderCurrentTab(animate) {
     html += '</div>';
     main.innerHTML = html;
     updateAllDelays();
+    renderRCUnreadBadge(); // 🆕 نرجع نطبق عداد الرسايل الجديدة بعد ما الكروت اتعاد رسمها
 }
 
 function renderDeliveredTab(animate) {
@@ -2111,7 +2207,7 @@ function buildOrderCard(o) {
     var pendingBadge = hasPendingAction(o.bon) ? ' <i class="fa-solid fa-triangle-exclamation" style="color:#FBBF24;font-size:12px;" title="لسه ماتبعتش للسيرفر - هيتبعت أوتوماتيك لما النت يرجع"></i>' : '';
     var html = '<div class="ocard' + arriveClass + '" id="card-bon-' + o.bon + '"><div class="oc-hdr"><span class="oc-bon"><i class="fa-solid ' + headerIcon + '"></i> بون: ' + o.bon + pendingBadge + '</span>' + badgeHTML + '</div>';
     if (phase !== 'new') {
-        html += '<div class="oc-info-box"><div class="oc-info-top"><div class="oc-name-row"><i class="fa-solid fa-user"></i><span class="oc-name-text">' + escHtml(o.name || '—') + '</span></div><div style="display:flex;align-items:center;gap:8px;"><button type="button" class="oc-chat-btn" onclick=\'event.stopPropagation();openRCChat(' + o.bon + ', ' + JSON.stringify(o.name || 'العميل') + ', ' + JSON.stringify(o.phone || '') + ')\'><i class="fa-solid fa-comment-dots"></i></button><a class="oc-phone-btn" href="tel:' + (o.phone || '') + '" onclick="event.stopPropagation()"><i class="fa-solid fa-phone"></i></a></div></div>';
+        html += '<div class="oc-info-box"><div class="oc-info-top"><div class="oc-name-row"><i class="fa-solid fa-user"></i><span class="oc-name-text">' + escHtml(o.name || '—') + '</span></div><div style="display:flex;align-items:center;gap:8px;"><div style="position:relative;"><button type="button" class="oc-chat-btn" onclick=\'event.stopPropagation();openRCChat(' + o.bon + ', ' + JSON.stringify(o.name || 'العميل') + ', ' + JSON.stringify(o.phone || '') + ')\'><i class="fa-solid fa-comment-dots"></i></button><span class="rc-unread-badge" id="rc-badge-' + o.bon + '" style="display:none;">0</span></div><a class="oc-phone-btn" href="tel:' + (o.phone || '') + '" onclick="event.stopPropagation()"><i class="fa-solid fa-phone"></i></a></div></div>';
         if (addrStr) { html += '<div class="oc-addr"><i class="fa-solid fa-location-dot"></i><div class="oc-addr-text"><strong>' + escHtml(addrStr) + '</strong>' + (landmarkStr ? '<span class="oc-landmark">(علامة: ' + escHtml(landmarkStr) + ')</span>' : '') + '</div></div>'; }
         html += '</div>';
     }
@@ -4630,13 +4726,32 @@ async function registerPushNotifications() {
         push.addListener('registrationError', function (err) {
             pushDebugLogRider('registration_error', err);
         });
-        push.addListener('pushNotificationReceived', function () {
+        push.addListener('pushNotificationReceived', function (notification) {
             // التطبيق فاتح والإشعار وصل - نحدّث البيانات على طول من غير ما ننتظر الفحص الدوري
             Promise.all([fetchOrders(), fetchInboxMessages()]);
+            // 🆕 تأكيد فعلي إن إشعار رسالة الشات وصل لجهازنا (best-effort، أساس
+            // "صحين رمادي" الجديد عند اللي بعت الرسالة)
+            try {
+                var d = notification && notification.data ? notification.data : {};
+                if (d.type === 'chat' && d.bon) {
+                    var body = JSON.stringify({ action: 'markRCNotified', bon: d.bon, role: 'rider', uptoRow: d.row || 999999 });
+                    fetch(GOOGLE_SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body, redirect: 'follow' }).catch(function () {});
+                    rcUnreadCounts[d.bon] = (rcUnreadCounts[d.bon] || 0) + 1;
+                    renderRCUnreadBadge();
+                }
+            } catch (e) {}
         });
-        push.addListener('pushNotificationActionPerformed', function () {
-            // الطيار دوس على الإشعار من قائمة الإشعارات - نحدّث البيانات فورًا
-            Promise.all([fetchOrders(), fetchInboxMessages()]);
+        push.addListener('pushNotificationActionPerformed', function (action) {
+            // 🆕 الطيار دوس على الإشعار - نوديه للحاجة اللي تخصه بالظبط: رسالة شات
+            // → شاشة الشات بتاعت نفس الطلب مباشرة، طلب جديد → تبويب الطلبات
+            // الجديدة مع وميض الكارت بتاعه 5 مرات، أي حاجة تانية → تحديث عادي
+            Promise.all([fetchOrders(), fetchInboxMessages()]).then(function () {
+                try {
+                    var d = (action && action.notification && action.notification.data) ? action.notification.data : {};
+                    if (d.type === 'chat' && d.bon) { openRCChatForBon(d.bon); }
+                    else if (d.type === 'new_order' && d.bon) { blinkOrderCard(d.bon); }
+                } catch (e) {}
+            });
         });
 
         await push.register();
@@ -4680,6 +4795,7 @@ function init() {
     buildNav();
     migrateOldDoneOrdersToHistoryOnce();
     registerPushNotifications(); // 🆕 تسجيل توكن إشعارات الطيار - بعد ما نتأكد إن رقم تليفونه معروف (بعد تسجيل الدخول)
+    try { startRCPresenceHeartbeat(); } catch(e) {} // 🆕 نبضة الحضور العامة - أساس الصحين الرمادي الجديد
     runMandatoryPermissionGate(); // 🆕 بوابة GPS/الموقع الإجبارية - أول حاجة تحصل قبل أي حاجة تانية
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') { silentPermissionRecheck(); } });
     if (mgIntervalId) clearInterval(mgIntervalId);

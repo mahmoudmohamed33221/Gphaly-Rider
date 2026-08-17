@@ -228,9 +228,11 @@
         .rc-typing-dots span:nth-child(3){animation-delay:.3s;}
         @keyframes rcTypingBounce{0%,60%,100%{transform:translateY(0);opacity:.4;}30%{transform:translateY(-4px);opacity:1;}}
         /* 🆕 سطر واحد موحّد للوقت + علامة الحالة جمب بعض (زي واتساب) بدل ما يبقوا
-           متباعدين (الحالة كانت مطلقة الموضع لوحدها والوقت تحتها منفصل) */
-        .rc-msg-meta{display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-top:3px;}
-        .rc-bubble.them .rc-msg-meta{justify-content:flex-start;}
+           متباعدين. مهم: البرنامج كله RTL، فـ flex-start/flex-end بيتقلبوا -
+           بنستخدم قيم فيزيائية صريحة (left/right) بدل المنطقية عشان نضمن اتجاه
+           ثابت مهما كان اتجاه الصفحة */
+        .rc-msg-meta{display:flex;align-items:center;justify-content:right;gap:4px;margin-top:3px;}
+        .rc-bubble.them .rc-msg-meta{justify-content:left;}
         .rc-status-icon{font-size:10px;color:rgba(0,17,17,.55);line-height:1;}
         .rc-status-icon.rc-double{letter-spacing:-3px;font-weight:900;}
         .rc-status-icon.rc-triple{letter-spacing:-3px;font-weight:900;}
@@ -609,11 +611,10 @@
 <div id="rc-chat-overlay" class="rc-chat-overlay">
     <div class="rc-chat-header">
         <button type="button" class="rc-back-btn" onclick="closeRCChat()"><i class="fa-solid fa-arrow-right"></i></button>
-        <div class="rc-title" id="rc-chat-title"><i class="fa-solid fa-user ml-1"></i>العميل</div>
+        <div class="rc-title" id="rc-chat-title"><i class="fa-solid fa-user ml-1"></i> العميل</div>
         <a href="#" id="rc-chat-call-btn" class="rc-call-btn"><i class="fa-solid fa-phone"></i></a>
     </div>
     <div class="rc-chat-body" id="rc-chat-body"></div>
-    <div id="rc-typing-indicator" class="rc-typing-indicator" style="display:none;margin:0 1rem 0.4rem;"><span>بيكتب الآن</span><div class="rc-typing-dots"><span></span><span></span><span></span></div></div>
     <div class="rc-quick-bar" id="rc-quick-bar"></div>
     <div class="rc-input-row">
         <input type="text" id="rc-chat-input" placeholder="اكتب رسالتك..." oninput="notifyRCTyping()" onkeydown="if(event.key==='Enter' && !event.isComposing){event.preventDefault();sendRCChat();}">
@@ -890,6 +891,7 @@ var rcPendingMessages = []; // [{clientId, text, confirmed}] - لحد ما تظ�
 var rcOtherStatus = { seenRow: 0, readRow: 0, notifiedRow: 0 }; // حالة آخر رسالة شافها/قراها العميل من رسايلي أنا
 var rcOtherOnline = false; // 🆕 العميل فاتح البرنامج بشكل عام دلوقتي؟ (مش شرط جوه الشات بالذات)
 var rcOtherPhone = ''; // 🆕 تليفون العميل - أساس فحص "الحضور" العام بتاعه
+var rcOtherTyping = false; // 🆕 العميل بيكتب دلوقتي؟ - بقى بيتعرض جوه تدفق الشات نفسه مش عائم لوحده
 
 // =========================================================================
 // 🆕 كاش محلي مؤقت لشات كل طلب (بالبون) - بدل ما فتح الشات يبان فاضي ويعمل
@@ -958,12 +960,14 @@ function openRCChat(bon, custName, custPhone) {
     rcOtherPhone = custPhone || '';
     // 🆕 دخل الشات ده بالذات - نصفّر عداد الرسايل الجديدة بتاعه فورًا
     rcUnreadCounts[bon] = 0; renderRCUnreadBadge();
+    rcOtherTyping = false;
     var titleEl = document.getElementById('rc-chat-title');
-    if (titleEl) titleEl.innerHTML = '<div class="rc-title-line1"><i class="fa-solid fa-user ml-1"></i>العميل: ' + escHtml(custName || 'العميل') + '</div><div class="rc-title-line2"><i class="fa-solid fa-receipt"></i>رقم البون: #' + bon + '</div>';
+    // 🆕 مسافات واضحة بين الأيقونة واسم "العميل" والنقطتين والاسم نفسه، بدل ما
+    // يبقوا ملتصقين ببعض
+    if (titleEl) titleEl.innerHTML = '<div class="rc-title-line1"><i class="fa-solid fa-user ml-1"></i> العميل : ' + escHtml(custName || 'العميل') + '</div><div class="rc-title-line2"><i class="fa-solid fa-receipt"></i> رقم البون : #' + bon + '</div>';
     var callBtn = document.getElementById('rc-chat-call-btn');
     if (callBtn) callBtn.href = custPhone ? ('tel:' + custPhone) : '#';
     var input = document.getElementById('rc-chat-input'); if (input) input.value = '';
-    var typingEl = document.getElementById('rc-typing-indicator'); if (typingEl) typingEl.style.display = 'none';
     renderRCQuickBar();
     // 🆕 نحمّل آخر نسخة معروفة من الكاش المحلي فورًا (لو موجودة) عشان الشات يبان
     // فيه محادثة على طول من غير ما يستنى رد السيرفر - fetchRCChat هيكمل يجيب أي
@@ -995,11 +999,19 @@ function fetchRCChat() {
             var data; try { data = JSON.parse(text); } catch (e) { data = null; }
             var msgs = (data && Array.isArray(data.messages)) ? data.messages : [];
             var fp = JSON.stringify(msgs);
-            if (fp !== rcChatFingerprint) {
-                rcChatFingerprint = fp; rcChatMessages = msgs;
+            var changed = fp !== rcChatFingerprint;
+            if (changed) { rcChatFingerprint = fp; rcChatMessages = msgs; saveRCChatCache(rcChatBon, msgs); }
+            // 🔧 ده أصل مشكلة "الرسالة بتتبعت مرتين" اللي فضلت شغالة برضو: كان
+            // التوفيق (reconcileRCPending) بيتنفذ بس لو الرسايل اتغيرت (fp
+            // مختلف). لو دورة الفحص الدورية جابت الرسالة الحقيقية قبل ما نداء
+            // الإرسال نفسه يخلص ويحط confirmed=true، كانت الرسالة الوهمية
+            // تفضل ظاهرة معلّقة للأبد لحد ما تسيب الشات وترجعله - لإن أي دورة
+            // فحص جاية بعد كده مكنش فيها تغيير حقيقي في الرسايل (fp زي ما هو)
+            // فمكنش بيحاول يوفّق تاني خالص. دلوقتي بنحاول التوفيق في كل دورة
+            // فحص طالما لسه فيه رسايل معلّقة، مش بس لما تتغيّر الرسايل
+            if (changed || rcPendingMessages.length) {
                 reconcileRCPending();
                 renderRCChatBody();
-                saveRCChatCache(rcChatBon, msgs);
             }
             // 🆕 جهازي فعليًا جاب الرسايل دلوقتي - "وصلت"، وبرضو "اتشافت" لو
             // شاشة الشات فعلاً ظاهرة قدامي دلوقتي (مش في الخلفية)
@@ -1034,15 +1046,16 @@ function reconcileRCPending() {
     });
 }
 
-// 🆕 مؤشر "العميل بيكتب الآن" - نفس فكرة الدعم الفني اللايف بالظبط
+// 🆕 مؤشر "العميل بيكتب الآن" - نفس فكرة الدعم الفني اللايف بالظبط، وبقى بيتعرض
+// جوه تدفق المحادثة نفسه (آخر عنصر في rc-chat-body) بدل عنصر عائم منفصل
 function pollRCTypingStatus() {
     if (!rcChatBon) return;
     fetch(GOOGLE_SCRIPT_URL + '?action=getRCTypingStatus&bon=' + encodeURIComponent(rcChatBon), { redirect: 'follow' })
         .then(function (r) { return r.text(); }).then(function (text) {
             if (!rcChatBon) return;
             var data; try { data = JSON.parse(text); } catch (e) { data = null; }
-            var el = document.getElementById('rc-typing-indicator');
-            if (el) el.style.display = (data && data.customer) ? 'flex' : 'none';
+            var typing = !!(data && data.customer);
+            if (typing !== rcOtherTyping) { rcOtherTyping = typing; renderRCChatBody(); }
         }).catch(function () {});
 }
 // 🆕 حالة رسايلي أنا (اتشافت عند العميل - فتح الشات بالذات) + "العميل فاتح
@@ -1156,7 +1169,7 @@ function rcStatusForRow(row) {
 function renderRCChatBody() {
     var box = document.getElementById('rc-chat-body'); if (!box) return;
     var totalCount = rcChatMessages.length + rcPendingMessages.length;
-    if (!totalCount) {
+    if (!totalCount && !rcOtherTyping) {
         box.innerHTML = '<div class="rc-empty-hint"><i class="fa-solid fa-comments" style="font-size:1.8rem;display:block;margin-bottom:0.5rem;"></i>ابدأ المحادثة مع العميل</div>';
         return;
     }
@@ -1169,6 +1182,11 @@ function renderRCChatBody() {
     for (var j = 0; j < rcPendingMessages.length; j++) {
         var pm = rcPendingMessages[j];
         html += '<div class="rc-bubble me">' + escHtml(pm.text) + rcMsgMetaHtml(pm.ts, rcStatusIconHtml(pm.confirmed ? 'sent' : 'sending')) + '</div>';
+    }
+    // 🆕 مؤشر "بيكتب الآن" بقى آخر عنصر في تدفق المحادثة نفسه - يعني ظاهر بالظبط
+    // في المكان اللي هتظهر فيه رسالته لما يخلص ويبعتها، مش عائم لوحده فوق شريط الكتابة
+    if (rcOtherTyping) {
+        html += '<div class="rc-typing-indicator"><span>بيكتب الآن</span><div class="rc-typing-dots"><span></span><span></span><span></span></div></div>';
     }
     box.innerHTML = html;
     box.scrollTop = box.scrollHeight;
@@ -1201,7 +1219,7 @@ function sendRCChat(quickText) {
     renderRCChatBody();
     var body = JSON.stringify({ action: 'sendRiderCustomerMessage', bon: rcChatBon, sender: 'rider', message: text });
     fetch(GOOGLE_SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body, redirect: 'follow' })
-        .then(function () { pmObj.confirmed = true; renderRCChatBody(); fetchRCChat(); })
+        .then(function () { pmObj.confirmed = true; reconcileRCPending(); renderRCChatBody(); fetchRCChat(); })
         .catch(function () { /* لسه ساعة - هتتأكد لما النت يرجع في دورة الجلب الجاية */ })
         .finally(function () { rcSending = false; if (sendBtn) sendBtn.disabled = false; });
 }

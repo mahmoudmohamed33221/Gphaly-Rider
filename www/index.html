@@ -790,7 +790,7 @@
 </div>
 
 <script>
-var GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyS1vjbXx7VfJ1InTgGmizmSGg7PvSIfHmOdTUXaE-_UtvBNOT-cxwc-N_J-Ko7pmAwoA/exec";
+var GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwmc_cSLEezv5QDqaPB6qz6snIi3-n_OsB-HYY76UBmsGZRFgWgElgbNlImBDsyOSebZA/exec";
 var APP_VERSION = "3.0.1"; // لازم يطابق قيمة الخلية D2 في الشيت، وإلا هيظهر تحديث إجباري
 
 // ⚡ عزل بيانات كل طيار عن التاني على نفس الجهاز: كل بيانات الطيار (أرباح/سجل/طلبات...) بتتخزن
@@ -934,7 +934,7 @@ function openRCChat(bon, custName, custPhone) {
     // 🆕 دخل الشات ده بالذات - نصفّر عداد الرسايل الجديدة بتاعه فورًا
     rcUnreadCounts[bon] = 0; renderRCUnreadBadge();
     var titleEl = document.getElementById('rc-chat-title');
-    if (titleEl) titleEl.innerHTML = '<div class="rc-title-line1"><i class="fa-solid fa-user ml-1"></i>العميل: ' + escHtml(custName || 'العميل') + '</div><div class="rc-title-line2"><i class="fa-solid fa-receipt"></i>رقم البون: #' + bon + '</div>';
+    if (titleEl) titleEl.innerHTML = '<div class="rc-title-line1"><i class="fa-solid fa-user" style="margin-left:6px;"></i>العميل : ' + escHtml(custName || 'العميل') + '</div><div class="rc-title-line2"><i class="fa-solid fa-receipt" style="margin-left:6px;"></i>رقم البون: #' + bon + '</div>';
     var callBtn = document.getElementById('rc-chat-call-btn');
     if (callBtn) callBtn.href = custPhone ? ('tel:' + custPhone) : '#';
     var input = document.getElementById('rc-chat-input'); if (input) input.value = '';
@@ -985,8 +985,10 @@ function fetchRCChat() {
 // متأخر شوية يرجّعها في نفس دورة الجلب
 function reconcileRCPending() {
     if (!rcPendingMessages.length) return;
+    // 🔧 مبقناش بنستنى pm.confirmed=true الأول - لو رسالة معلّقة ظهرت فعليًا في رسايل
+    // السيرفر (حتى لو الـ fetch بتاع الإرسال نفسه لسه ماخلصش)، نشيلها فورًا. ده اللي كان
+    // بيسبب "رسالة ظاهرة مرتين" (وحدة حقيقية من السيرفر + وحدة معلّقة لسه واقفة على أيقونة الساعة)
     rcPendingMessages = rcPendingMessages.filter(function (pm) {
-        if (!pm.confirmed) return true;
         var foundInServer = rcChatMessages.some(function (m) { return m.sender === 'rider' && m.text === pm.text; });
         return !foundInServer;
     });
@@ -4402,7 +4404,16 @@ function fetchOrders() {
                 else if (pend.type === 'prepare') { allOrders[p].isPreparing = true; }
                 else if (pend.type === 'deliver') { allOrders[p].isDelivering = true; if (pend.orderCost != null) allOrders[p].orderCost = pend.orderCost; if (pend.deliveryCost != null) allOrders[p].deliveryCost = pend.deliveryCost; }
             }
-            for (var i = 0; i < allOrders.length; i++) { knownBons.add(allOrders[i].bon); }
+            for (var i = 0; i < allOrders.length; i++) {
+                knownBons.add(allOrders[i].bon);
+                // 🔧 عداد الرسايل الجديدة بقى بيتحدث من السيرفر مباشرة كل دورة مزامنة (مش بس
+                // لما إشعار Push يوصل والبرنامج فاتح قدامنا) - كده الأيقونة تظهر صح دايمًا حتى
+                // لو الإشعار اتأخر أو ماوصلش، لأنه بيتبني من الرسايل الفعلية الموجودة في الشيت
+                if (allOrders[i].rcUnread !== undefined && rcChatBon !== allOrders[i].bon) {
+                    rcUnreadCounts[allOrders[i].bon] = allOrders[i].rcUnread;
+                }
+            }
+            renderRCUnreadBadge();
             syncAcceptedTimes();
             if (oldBons.size > 0) { for (var j = 0; j < allOrders.length; j++) { if (!oldBons.has(allOrders[j].bon) && getOrderPhase(allOrders[j]) === 'new') { spawnNewOrderAlert(allOrders[j].bon, allOrders[j].name); } } }
             var newFingerprint = getOrdersFingerprint(); lastSync = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); clearTimeout(loadingTimer); updateSyncUI('on'); updateBadges();

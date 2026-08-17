@@ -793,7 +793,7 @@
 </div>
 
 <script>
-var GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwJEDAbIzgvn2Z-WNAfQYT8ZOy-BcUOYGw6em-zXoJGMn8-ufgVRG_vC7hj9SFwyGIFjg/exec";
+var GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyOubBCqFjFLY7Ysul-eyWB8KKi7GB96tiQYm8hAno4OYyI2rlSpWmBJACYp7xqg97bQg/exec";
 var APP_VERSION = "3.0.1"; // لازم يطابق قيمة الخلية D2 في الشيت، وإلا هيظهر تحديث إجباري
 
 // ⚡ عزل بيانات كل طيار عن التاني على نفس الجهاز: كل بيانات الطيار (أرباح/سجل/طلبات...) بتتخزن
@@ -986,13 +986,34 @@ function closeRCChat() {
     rcChatBon = null;
     var overlay = document.getElementById('rc-chat-overlay'); if (overlay) overlay.classList.remove('show');
 }
-function startRCChatPoll() { stopRCChatPoll(); fetchRCChat(); rcChatPollTimer = setInterval(fetchRCChat, 3000); }
+// 🆕 السرعة: قللنا فترة الفحص لأقصى حد ممكن، مع حارس ذكي: لو التطبيق في
+// الخلفية (الشاشة مقفولة/التطبيق مش ظاهر) بنبطّئ تلقائيًا لمرة كل ~4 ثواني
+// بدل الضغط على السيرفر بمعدل سريع وهو مش لازم أصلاً (محدش شايف الشاشة).
+// الفحص السريع شغال بس لما الشات فعلاً مفتوح وظاهر قدام المستخدم - وده أصلاً
+// محدود بعدد المحادثات المفتوحة فعليًا في نفس اللحظة، مش كل المستخدمين
+var rcLastChatFetchAt = 0;
+function startRCChatPoll() {
+    stopRCChatPoll(); fetchRCChat();
+    rcChatPollTimer = setInterval(function () {
+        if (document.hidden && (Date.now() - rcLastChatFetchAt) < 4000) return;
+        fetchRCChat();
+    }, 1200);
+}
 function stopRCChatPoll() { if (rcChatPollTimer) { clearInterval(rcChatPollTimer); rcChatPollTimer = null; } }
-function startRCTypingPoll() { stopRCTypingPoll(); pollRCTypingStatus(); pollRCMessageStatus(); rcTypingPollTimer = setInterval(function () { pollRCTypingStatus(); pollRCMessageStatus(); }, 2500); }
+var rcLastTypingPollAt = 0;
+function startRCTypingPoll() {
+    stopRCTypingPoll(); pollRCTypingStatus(); pollRCMessageStatus();
+    rcTypingPollTimer = setInterval(function () {
+        if (document.hidden && (Date.now() - rcLastTypingPollAt) < 4000) return;
+        rcLastTypingPollAt = Date.now();
+        pollRCTypingStatus(); pollRCMessageStatus();
+    }, 1000);
+}
 function stopRCTypingPoll() { if (rcTypingPollTimer) { clearInterval(rcTypingPollTimer); rcTypingPollTimer = null; } if (rcTypingHeartbeat) { clearInterval(rcTypingHeartbeat); rcTypingHeartbeat = null; } }
 
 function fetchRCChat() {
     if (!rcChatBon) return;
+    rcLastChatFetchAt = Date.now();
     fetch(GOOGLE_SCRIPT_URL + '?action=getRiderCustomerChat&bon=' + encodeURIComponent(rcChatBon), { redirect: 'follow' })
         .then(function (r) { return r.text(); }).then(function (text) {
             if (!rcChatBon) return;
@@ -1089,7 +1110,7 @@ var rcPresenceHeartbeatTimer = null;
 function startRCPresenceHeartbeat() {
     if (rcPresenceHeartbeatTimer) return;
     sendRCPresencePing();
-    rcPresenceHeartbeatTimer = setInterval(sendRCPresencePing, 15000);
+    rcPresenceHeartbeatTimer = setInterval(sendRCPresencePing, 10000); // 🆕 من 15 لـ 10 ثواني
     document.addEventListener('visibilitychange', function () { if (!document.hidden) sendRCPresencePing(); });
 }
 function sendRCPresencePing() {
@@ -1099,7 +1120,8 @@ function sendRCPresencePing() {
     var body = JSON.stringify({ action: 'setPresence', role: 'rider', identifier: phone });
     fetch(GOOGLE_SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body, redirect: 'follow' }).catch(function () {});
 }
-// بيتبعت بمعدل مرة كل 1.2 ثانية بس (مش كل حرف) لما المندوب يكتب
+// 🆕 السرعة: بقى بيتبعت بمعدل مرة كل ٨٠٠ مللي ثانية بدل ١٫٢ ثانية (لسه في هامش
+// أمان تحت مهلة السيرفر ٤ ثواني اللي بيعتبر بعدها إن الكتابة وقفت)
 function notifyRCTyping() {
     if (!rcChatBon) return;
     var input = document.getElementById('rc-chat-input');
@@ -1108,11 +1130,11 @@ function notifyRCTyping() {
             var el = document.getElementById('rc-chat-input');
             if (!el) { clearInterval(rcTypingHeartbeat); rcTypingHeartbeat = null; return; }
             if (el.value.trim().length > 0) sendRCTypingPing(false); else notifyRCStoppedTyping();
-        }, 1500);
+        }, 1000);
     }
     if (input && !input.value.trim()) { notifyRCStoppedTyping(); return; }
     var now = Date.now();
-    if (now - rcLastTypingSentAt < 1200) return;
+    if (now - rcLastTypingSentAt < 800) return;
     sendRCTypingPing(false);
 }
 function notifyRCStoppedTyping() { if (rcChatBon) sendRCTypingPing(true); }
@@ -3684,7 +3706,9 @@ function refreshVisibleOrderCardDistances() {
 // 🆕 بيبعت مسافة الوصول الحية (للمحل وقت "جاري التحضير"، أو للعميل وقت "جاري
 // التوصيل") للسيرفر كل شوية، عشان تطبيق جبهالي ماركت يقدر يعرضها للعميل بشكل حي
 // =========================================================================
-var RIDER_ETA_PUSH_INTERVAL_MS = 10000;
+// 🆕 السرعة: من 10 لـ 7 ثواني - النطاق ده محدود أصلاً بعدد المناديب اللي في
+// توصيل شغال حاليًا بس (مش كل المناديب المتصلين)، فمساحة الأمان أكبر
+var RIDER_ETA_PUSH_INTERVAL_MS = 7000;
 
 function pushLiveEtaUpdates() {
     if (!allOrders || !allOrders.length || !ACTIVE_PILOT_ID) return;
@@ -4383,7 +4407,7 @@ function renderSupportChatView() {
 
 // =========================================================================
 // ⌨️ مؤشر "جاري الكتابة" (جانب الطيار): بيبعت للسيرفر إن الطيار بيكتب، وبيتابع
-// حالة موظف الدعم كل ثانيتين ونص طول ما شات الدعم مفتوح قدامه
+// حالة موظف الدعم كل ١٫٢ ثانية طول ما شات الدعم مفتوح قدامه (🆕 كانت 2.5 ثانية)
 // =========================================================================
 var typingPollTimerReader = null;
 var lastPilotTypingSentAt = 0;
@@ -4391,7 +4415,7 @@ var riderTypingHeartbeat = null; // 🆕 نبضة متكررة طول ما في�
 
 function startEmployeeTypingPoll() {
     stopEmployeeTypingPoll();
-    typingPollTimerReader = setInterval(pollEmployeeTypingStatus, 2500);
+    typingPollTimerReader = setInterval(pollEmployeeTypingStatus, 1200);
     pollEmployeeTypingStatus();
 }
 function stopEmployeeTypingPoll() {
@@ -4424,7 +4448,7 @@ function notifyPilotStoppedTyping() {
     var body = JSON.stringify({ action: 'setTypingStatus', chatId: supportActiveChatId, stop: true });
     fetch(GOOGLE_SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body, redirect: 'follow' }).catch(function() {});
 }
-// 🆕 نبضة كل 1.5 ثانية طول ما لسه فيه نص في مربع الرد، عشان "بيكتب الآن" يفضل ظاهر عند
+// 🆕 نبضة كل ٩٠٠ مللي ثانية (كانت 1.5 ثانية) طول ما لسه فيه نص في مربع الرد، عشان "بيكتب الآن" يفضل ظاهر عند
 // موظف الدعم طول ما الطيار واقف عند كلامه (بدل ما يختفي بعد مهلة الـ4 ثواني رغم إن الكلام لسه موجود).
 // بتوقف نفسها لوحدها لو شريط الرد اتشال من الشاشة.
 function startPilotTypingHeartbeat() {
@@ -4433,7 +4457,7 @@ function startPilotTypingHeartbeat() {
         var el = document.getElementById('supportReplyInput');
         if (!el) { clearInterval(riderTypingHeartbeat); riderTypingHeartbeat = null; return; }
         if (el.value.trim().length > 0) notifyPilotTyping();
-    }, 1500);
+    }, 900);
 }
 
 // ⚡ بيحسب المساحة الفعلية المتاحة لصندوق رسايل الشات، من تحت الإشعار (تم الاستلام / في الانتظار...)
@@ -4726,7 +4750,11 @@ function updateBadges() {
     for (var j = 0; j < keys.length; j++) { var badge = document.getElementById('badge-' + keys[j]); if (badge) { badge.textContent = vals[j]; badge.style.display = vals[j] > 0 ? 'flex' : 'none'; } }
 }
 
-var POLL_INTERVAL_MS = 8000; // تم تقليلها من 15 ثانية لـ 8 ثواني بناءً على طلبك
+// 🆕 السرعة: من 8 لـ 6 ثواني. ده الفحص الرئيسي الشغال طول الوقت لكل مندوب متصل
+// (مش محدود بشاشة معيّنة زي الشات)، وبيجمع كذا طلب مع بعض (طلبات جديدة،
+// إشعارات، مزامنة...) - فسرّعناه باعتدال بس عشان منضغطش على السيرفر مع عدد
+// كبير من المناديب الشغالين في نفس الوقت
+var POLL_INTERVAL_MS = 6000;
 
 function manualRefresh() {
     var btn = document.getElementById('refBtn'); if (btn) btn.classList.add('spin');

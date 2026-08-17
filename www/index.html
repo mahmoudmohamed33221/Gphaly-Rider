@@ -227,13 +227,15 @@
         .rc-typing-dots span:nth-child(2){animation-delay:.15s;}
         .rc-typing-dots span:nth-child(3){animation-delay:.3s;}
         @keyframes rcTypingBounce{0%,60%,100%{transform:translateY(0);opacity:.4;}30%{transform:translateY(-4px);opacity:1;}}
-        /* 🆕 أيقونات حالة الرسالة (بدل المثلث الأصفر): ساعة/صح/صحين */
-        .rc-bubble.me{position:relative;padding-left:1.7rem;}
-        .rc-status-icon{position:absolute;left:.55rem;bottom:.4rem;font-size:10px;color:rgba(0,17,17,.55);}
-        .rc-status-icon.rc-double{letter-spacing:-3px;padding-left:3px;font-weight:900;}
-        .rc-status-icon.rc-triple{letter-spacing:-3px;padding-left:3px;font-weight:900;}
+        /* 🆕 سطر واحد موحّد للوقت + علامة الحالة جمب بعض (زي واتساب) بدل ما يبقوا
+           متباعدين (الحالة كانت مطلقة الموضع لوحدها والوقت تحتها منفصل) */
+        .rc-msg-meta{display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-top:3px;}
+        .rc-bubble.them .rc-msg-meta{justify-content:flex-start;}
+        .rc-status-icon{font-size:10px;color:rgba(0,17,17,.55);line-height:1;}
+        .rc-status-icon.rc-double{letter-spacing:-3px;font-weight:900;}
+        .rc-status-icon.rc-triple{letter-spacing:-3px;font-weight:900;}
         .rc-status-icon.rc-read{color:#0891B2;text-shadow:0 0 5px rgba(34,211,238,.9);}
-        .rc-msg-time{font-size:9px;color:rgba(0,17,17,.5);margin-top:2px;text-align:left;}
+        .rc-msg-time{font-size:9px;color:rgba(0,17,17,.5);line-height:1;}
         .rc-bubble.them .rc-msg-time{color:var(--dim,#94A3B8);}
         .rc-unread-badge{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;border-radius:999px;background:#EF4444;color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid #0B0F19;}
         /* 🆕 وميض الكارت لما نيجي منه من إشعار "طلب جديد" - يلفت النظر له بسرعة */
@@ -615,7 +617,7 @@
     <div class="rc-quick-bar" id="rc-quick-bar"></div>
     <div class="rc-input-row">
         <input type="text" id="rc-chat-input" placeholder="اكتب رسالتك..." oninput="notifyRCTyping()" onkeydown="if(event.key==='Enter' && !event.isComposing){event.preventDefault();sendRCChat();}">
-        <button type="button" class="rc-send-btn" onclick="sendRCChat()"><i class="fa-solid fa-paper-plane"></i></button>
+        <button type="button" id="rc-chat-send-btn" class="rc-send-btn" onclick="sendRCChat()"><i class="fa-solid fa-paper-plane"></i></button>
     </div>
 </div>
 <div id="mandatory-gate">
@@ -888,6 +890,29 @@ var rcPendingMessages = []; // [{clientId, text, confirmed}] - لحد ما تظ�
 var rcOtherStatus = { seenRow: 0, readRow: 0, notifiedRow: 0 }; // حالة آخر رسالة شافها/قراها العميل من رسايلي أنا
 var rcOtherOnline = false; // 🆕 العميل فاتح البرنامج بشكل عام دلوقتي؟ (مش شرط جوه الشات بالذات)
 var rcOtherPhone = ''; // 🆕 تليفون العميل - أساس فحص "الحضور" العام بتاعه
+
+// =========================================================================
+// 🆕 كاش محلي مؤقت لشات كل طلب (بالبون) - بدل ما فتح الشات يبان فاضي ويعمل
+// إعادة تحميل كاملة من الشيت في كل مرة، بنسيب آخر نسخة معروفة من الرسايل في
+// localStorage ونعرضها فورًا لحظة الفتح (حتى قبل ما نكلم السيرفر خالص)،
+// وبعدين فحص السيرفر الدوري (fetchRCChat) بيكمل عادي فوقها ويجيب أي رسالة
+// جديدة. الكاش ده بيتمسح تلقائيًا لما الطلب يتسلّم أو يتلغي (زي مسح الشات
+// نفسه على السيرفر بالظبط) - لإن الشات ده مؤقت بطبيعته لمدة توصيل الأوردر بس.
+function rcCacheKey_(bon) { return 'gebhaly_rc_cache_' + bon; }
+function loadRCChatCache(bon) {
+    try {
+        var raw = localStorage.getItem(rcCacheKey_(bon));
+        if (!raw) return null;
+        var parsed = JSON.parse(raw);
+        return (parsed && Array.isArray(parsed.messages)) ? parsed : null;
+    } catch (e) { return null; }
+}
+function saveRCChatCache(bon, messages) {
+    try { localStorage.setItem(rcCacheKey_(bon), JSON.stringify({ messages: messages, savedAt: Date.now() })); } catch (e) {}
+}
+function clearRCChatCache(bon) {
+    try { localStorage.removeItem(rcCacheKey_(bon)); } catch (e) {}
+}
 // 🆕 عداد الرسايل الجديدة الغير مقروءة لكل بون - بيزيد لما إشعار رسالة جديدة
 // يوصل والشات مقفول، وبيتصفر تمامًا لما الطيار يفتح شات الطلب ده بالذات
 var rcUnreadCounts = {};
@@ -940,6 +965,11 @@ function openRCChat(bon, custName, custPhone) {
     var input = document.getElementById('rc-chat-input'); if (input) input.value = '';
     var typingEl = document.getElementById('rc-typing-indicator'); if (typingEl) typingEl.style.display = 'none';
     renderRCQuickBar();
+    // 🆕 نحمّل آخر نسخة معروفة من الكاش المحلي فورًا (لو موجودة) عشان الشات يبان
+    // فيه محادثة على طول من غير ما يستنى رد السيرفر - fetchRCChat هيكمل يجيب أي
+    // رسالة جديدة فوقها زي العادة
+    var cached = loadRCChatCache(bon);
+    if (cached) { rcChatMessages = cached.messages; rcChatFingerprint = JSON.stringify(cached.messages); }
     renderRCChatBody();
     var overlay = document.getElementById('rc-chat-overlay'); if (overlay) overlay.classList.add('show');
     startRCChatPoll();
@@ -969,6 +999,7 @@ function fetchRCChat() {
                 rcChatFingerprint = fp; rcChatMessages = msgs;
                 reconcileRCPending();
                 renderRCChatBody();
+                saveRCChatCache(rcChatBon, msgs);
             }
             // 🆕 جهازي فعليًا جاب الرسايل دلوقتي - "وصلت"، وبرضو "اتشافت" لو
             // شاشة الشات فعلاً ظاهرة قدامي دلوقتي (مش في الخلفية)
@@ -982,13 +1013,24 @@ function fetchRCChat() {
 
 // 🆕 بتشيل الرسالة المعلّقة بس لما تظهر فعليًا في رسايل السيرفر (بعد التأكد إنها
 // اتبعتت)، بدل ما تتشال فورًا لحظة نجاح الإرسال - ده بيمنع فليكر لو السيرفر
-// متأخر شوية يرجّعها في نفس دورة الجلب
+// متأخر شوية يرجّعها في نفس دورة الجلب.
+// 🔧 بقى بيطابق كل رسالة معلّقة بصف سيرفر لسه محدش استخدمه (usedRows) وقريب من
+// وقت إرسالها (+- 60 ثانية) - مش أي رسالة بنفس النص بس، عشان لو الطيار بعت نفس
+// الرسالة الجاهزة قبل كده في نفس المحادثة، معندهاش تتلخبط مع رسالة قديمة وتفضل
+// شايف الجديدة "وهمية" ومكرّرة جنب القديمة الحقيقية.
 function reconcileRCPending() {
     if (!rcPendingMessages.length) return;
+    var usedRows = {};
     rcPendingMessages = rcPendingMessages.filter(function (pm) {
         if (!pm.confirmed) return true;
-        var foundInServer = rcChatMessages.some(function (m) { return m.sender === 'rider' && m.text === pm.text; });
-        return !foundInServer;
+        for (var i = 0; i < rcChatMessages.length; i++) {
+            var m = rcChatMessages[i];
+            if (m.sender === 'rider' && m.text === pm.text && !usedRows[m.row] && Math.abs((m.ts || 0) - (pm.ts || 0)) < 60000) {
+                usedRows[m.row] = true;
+                return false;
+            }
+        }
+        return true;
     });
 }
 
@@ -1094,7 +1136,13 @@ function rcTimeHtml(ts) {
     var h = d.getHours(), m = d.getMinutes();
     var h12 = h % 12 === 0 ? 12 : h % 12;
     var ampm = h < 12 ? 'ص' : 'م';
-    return '<div class="rc-msg-time">' + h12 + ':' + (m < 10 ? '0' + m : m) + ' ' + ampm + '</div>';
+    return '<span class="rc-msg-time">' + h12 + ':' + (m < 10 ? '0' + m : m) + ' ' + ampm + '</span>';
+}
+// 🆕 بيلمّ الوقت وعلامة الحالة سطر واحد جمب بعض (بدل ما يبقوا متباعدين -
+// الحالة كانت لوحدها والوقت تحتها منفصل)
+function rcMsgMetaHtml(ts, statusHtml) {
+    if (!ts && !statusHtml) return '';
+    return '<div class="rc-msg-meta">' + rcTimeHtml(ts) + statusHtml + '</div>';
 }
 // 🔧 صحين رمادي = اتأكد وصولها فعليًا كإشعار لتليفونه. 3 صح رمادي = فاتح
 // البرنامج بشكل عام (مش شرط جوه الشات). 3 صح فسفوري = فاتح الشات بالذات وشاف الرسالة دي.
@@ -1116,11 +1164,11 @@ function renderRCChatBody() {
     for (var i = 0; i < rcChatMessages.length; i++) {
         var m = rcChatMessages[i];
         var statusHtml = (m.sender === 'rider') ? rcStatusIconHtml(rcStatusForRow(m.row || 0)) : '';
-        html += '<div class="rc-bubble ' + (m.sender === 'rider' ? 'me' : 'them') + '">' + escHtml(m.text) + statusHtml + rcTimeHtml(m.ts) + '</div>';
+        html += '<div class="rc-bubble ' + (m.sender === 'rider' ? 'me' : 'them') + '">' + escHtml(m.text) + rcMsgMetaHtml(m.ts, statusHtml) + '</div>';
     }
     for (var j = 0; j < rcPendingMessages.length; j++) {
         var pm = rcPendingMessages[j];
-        html += '<div class="rc-bubble me">' + escHtml(pm.text) + rcStatusIconHtml(pm.confirmed ? 'sent' : 'sending') + rcTimeHtml(pm.ts) + '</div>';
+        html += '<div class="rc-bubble me">' + escHtml(pm.text) + rcMsgMetaHtml(pm.ts, rcStatusIconHtml(pm.confirmed ? 'sent' : 'sending')) + '</div>';
     }
     box.innerHTML = html;
     box.scrollTop = box.scrollHeight;
@@ -1129,17 +1177,22 @@ function renderRCChatBody() {
 // نص اختياري (من زرار رسالة جاهزة) وإلا بياخد من مربع الكتابة
 var rcLastSentText = '';
 var rcLastSentAt = 0;
+var rcSending = false; // 🆕 قفل صريح ضد الإرسال المزدوج - أضمن من مقارنة النص/الوقت بس
 function sendRCChat(quickText) {
     if (!rcChatBon) return;
     var input = document.getElementById('rc-chat-input');
     var text = (quickText !== undefined ? quickText : (input ? input.value.trim() : ''));
     if (!text) return;
-    // 🔧 حارس ضد الإرسال المزدوج (سبب مشكلة "الرسالة بتتبعت مرتين"): بعض
-    // كيبوردات الموبايل بتطلق حدث Enter مرتين قريبين من بعض - لو نفس النص
-    // اتبعت خلال أقل من ثانية، نتجاهل المحاولة التانية
+    // 🔧 قفل صريح: لو في رسالة لسه بتتبعت، منمنعش المحاولة التانية نهائيًا -
+    // ده اللي كان بيسبب مشكلة "الرسالة بتتبعت مرتين" (مرة وهمية زيادة عن نفس
+    // الرسالة الحقيقية) لو حصل ضغط مزدوج أو حدث Enter اتطلق مرتين من الكيبورد
+    if (rcSending) return;
+    // 🔧 حارس إضافي ضد نفس النص خلال أقل من ثانية (احتياطي فوق القفل)
     var now = Date.now();
     if (text === rcLastSentText && (now - rcLastSentAt) < 1000) return;
     rcLastSentText = text; rcLastSentAt = now;
+    rcSending = true;
+    var sendBtn = document.getElementById('rc-chat-send-btn'); if (sendBtn) sendBtn.disabled = true;
     if (input && quickText === undefined) input.value = '';
     notifyRCStoppedTyping();
     // 🆕 إضافة فورية على الشاشة (Optimistic) عشان الإرسال يبان لحظي - بتبدأ بأيقونة الساعة
@@ -1149,7 +1202,8 @@ function sendRCChat(quickText) {
     var body = JSON.stringify({ action: 'sendRiderCustomerMessage', bon: rcChatBon, sender: 'rider', message: text });
     fetch(GOOGLE_SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body, redirect: 'follow' })
         .then(function () { pmObj.confirmed = true; renderRCChatBody(); fetchRCChat(); })
-        .catch(function () { /* لسه ساعة - هتتأكد لما النت يرجع في دورة الجلب الجاية */ });
+        .catch(function () { /* لسه ساعة - هتتأكد لما النت يرجع في دورة الجلب الجاية */ })
+        .finally(function () { rcSending = false; if (sendBtn) sendBtn.disabled = false; });
 }
 
 
@@ -4554,6 +4608,7 @@ function deliverOrderLocally(bon, orderCost, deliveryCost) {
 }
 
 function completeOrderLocally(bon) {
+    clearRCChatCache(bon); // 🆕 الشات ده مؤقت طول مدة التوصيل بس - يتمسح لما الأوردر يخلص
     var idx = findOrderIndex(bon);
     var order = idx !== -1 ? allOrders[idx] : null;
     if (order) {
@@ -4586,6 +4641,7 @@ function completeOrderLocally(bon) {
 }
 
 function cancelOrderLocally(bon) {
+    clearRCChatCache(bon); // 🆕 برضو بيتمسح لو الأوردر اتلغى
     var idx = findOrderIndex(bon);
     var order = idx !== -1 ? allOrders[idx] : null;
     if (order) {

@@ -231,8 +231,9 @@
            متباعدين. مهم: البرنامج كله RTL، فـ flex-start/flex-end بيتقلبوا -
            بنستخدم قيم فيزيائية صريحة (left/right) بدل المنطقية عشان نضمن اتجاه
            ثابت مهما كان اتجاه الصفحة */
-        .rc-msg-meta{display:flex;align-items:center;justify-content:right;gap:4px;margin-top:3px;}
-        .rc-bubble.them .rc-msg-meta{justify-content:left;}
+        /* 🆕 نظام الصح والوقت بقى على الشمال خالص لكل الرسايل (مش بس رسايل
+           الطرف التاني) - مسافة واحدة موحّدة بينهم */
+        .rc-msg-meta{display:flex;align-items:center;justify-content:left;gap:4px;margin-top:3px;}
         .rc-status-icon{font-size:10px;color:rgba(0,17,17,.55);line-height:1;}
         .rc-status-icon.rc-double{letter-spacing:-3px;font-weight:900;}
         .rc-status-icon.rc-triple{letter-spacing:-3px;font-weight:900;}
@@ -602,7 +603,8 @@
         .mg-icon.is-error { color: var(--danger); }
         .mg-title { color: var(--fg); font-weight: 800; font-size: 1.15rem; margin-bottom: 0.6rem; }
         .mg-text { color: var(--muted); font-size: 0.85rem; line-height: 1.7; max-width: 340px; margin-bottom: 1.6rem; }
-        .mg-btn { background: var(--accent); color: #06210F; font-weight: 800; padding: 0.9rem 2.2rem; border-radius: 0.9rem; font-size: 0.95rem; border: none; }
+        .mg-btn { background: var(--accent); color: #06210F; font-weight: 800; padding: 0.9rem 2.2rem; border-radius: 0.9rem; font-size: 0.95rem; border: none; margin: 0.3rem; }
+        .mg-btn-secondary { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
         .mg-spinner { width: 34px; height: 34px; border: 3px solid rgba(0,230,118,0.25); border-top-color: var(--accent); border-radius: 50%; animation: mg-spin 0.8s linear infinite; margin-bottom: 1.1rem; }
         @keyframes mg-spin { to { transform: rotate(360deg); } }
     </style>
@@ -2373,6 +2375,11 @@ async function ensureNativeLocationPermission() {
 // التوصيل والتتبع الحي محتاجين GPS شغال طول الوقت). وطول ما التطبيق مفتوح، بيتعمل
 // فحص دوري كل فترة، فلو الطيار قفل صلاحية الموقع أو قفل الـ GPS من نص الاستخدام،
 // هتظهرله البوابة تاني تطلب منه يرجع يفعّلها.
+// 🆕 وبقى كمان مينفعش يستخدم البرنامج غير لو وافق على صلاحية الموقع "طوال الوقت"
+// (Allow all the time) - مش بس "أثناء استخدام البرنامج" - لإن من غيرها خط سير
+// المندوب هيتوقف عند العميل أول ما يقفل الشاشة، وده بالظبط أصل المشكلة اللي
+// البوابة دي اتعملت عشانها. نفس مبدأ إجبارية الـ GPS بالظبط: بوابة كاملة الشاشة
+// من غير أي إمكانية تخطي لحد ما يوافق فعليًا
 // =========================================================================
 var mgRunning = false, mgIntervalId = null;
 
@@ -2385,12 +2392,29 @@ function showMandatoryGate(state) {
         content.innerHTML = '<i class="fa-solid fa-map-marker-alt mg-icon is-error"></i><div class="mg-title">لازم تسمح بصلاحية الموقع</div><div class="mg-text">التطبيق محتاج صلاحية الموقع عشان يقدر يتتبع رحلتك ويوصّلك بدقة للمحل والعميل. لو دوست "لا تسمح" بالغلط، افتح: إعدادات الهاتف ← التطبيقات ← جبهالي ريدر ← الأذونات ← فعّل "الموقع"، وبعدين ارجع دوس الزرار تحت.</div><button type="button" class="mg-btn" onclick="runMandatoryPermissionGate()">حاول تاني</button>';
     } else if (state === 'gps-off') {
         content.innerHTML = '<i class="fa-solid fa-location-crosshairs mg-icon is-error"></i><div class="mg-title">خدمة الموقع (GPS) مقفولة</div><div class="mg-text">من فضلك فعّل خدمة تحديد الموقع (GPS) من هاتفك عشان تقدر تستخدم التطبيق: افتح شريط الإشعارات السريع من أعلى الشاشة ودوس على أيقونة "الموقع"، وبعدين ارجع دوس الزرار تحت.</div><button type="button" class="mg-btn" onclick="runMandatoryPermissionGate()">حاول تاني</button>';
+    } else if (state === 'bg-location') {
+        // 🆕 لازم "طوال الوقت" مش بس "أثناء الاستخدام" - عشان تتبع رحلتك يفضل شغال
+        // عند العميل حتى لو قفلت الشاشة أو خرجت من البرنامج
+        content.innerHTML = '<i class="fa-solid fa-satellite-dish mg-icon is-error"></i><div class="mg-title">لازم تفعّل صلاحية الموقع "طوال الوقت"</div><div class="mg-text">عشان العميل يقدر يتابع رحلتك حتى لو قفلت الشاشة أو خرجت من البرنامج، لازم تختار "السماح طوال الوقت" لصلاحية الموقع (مش "أثناء استخدام البرنامج" بس). دوس الزرار تحت يفتحلك شاشة الأذونات، اختار "Allow all the time" / "السماح طوال الوقت"، وبعدين ارجع للبرنامج.</div><button type="button" class="mg-btn" onclick="openBgLocationSettings()">افتح إعدادات الصلاحية</button><button type="button" class="mg-btn mg-btn-secondary" onclick="runMandatoryPermissionGate()">حاول تاني</button>';
     }
     gate.classList.add('show');
 }
 
 function hideMandatoryGate() {
     document.getElementById('mandatory-gate').classList.remove('show');
+}
+
+// 🆕 بيفتح شاشة أذونات التطبيق في إعدادات الهاتف مباشرة (البلجن بيوفرها جاهزة)
+// عشان الطيار يقدر يوصل لخيار "طوال الوقت" بسهولة - أندرويد بداية النسخة 11 مش
+// بيسمح بعرض الخيار ده في نافذة الإذن العادية، لازم يتحدد من الإعدادات
+async function openBgLocationSettings() {
+    try {
+        var bg = window.Capacitor.Plugins && window.Capacitor.Plugins.BackgroundGeolocation;
+        if (bg && bg.openSettings) { await bg.openSettings(); return; }
+    } catch (e) {}
+    // 🆕 لو لأي سبب البلجن مش قادر يفتح الإعدادات مباشرة، على الأقل نوضح للطيار
+    // المسار اليدوي بدل ما يفضل واقف من غير أي حل
+    pushToast('افتح: إعدادات الهاتف ← التطبيقات ← جبهالي ريدر ← الأذونات ← الموقع ← اختار "السماح طوال الوقت"', 'info');
 }
 
 async function checkGpsAndPermissionOk() {
@@ -2403,10 +2427,53 @@ async function checkGpsAndPermissionOk() {
         // مهلة زمنية أو انتظار لموقع فعلي
         var status = await geo.checkPermissions();
         if (status.location !== 'granted') return { ok: false, reason: 'denied' };
-        return { ok: true };
     } catch (e) {
         return { ok: false, reason: 'gps-off' };
     }
+    // 🆕 كمان لازم يبقى مسموح بالتتبع "طوال الوقت" - من غيرها خط سير المندوب
+    // هيتوقف عند العميل أول ما يقفل الشاشة أو يخرج من البرنامج
+    var bgResult = await checkBackgroundLocationOk();
+    if (!bgResult.ok) return { ok: false, reason: 'bg-location' };
+    return { ok: true };
+}
+
+// 🆕 بيحاول يشغّل متتبع الخلفية فعليًا كطريقة فحص (مش بس سؤال البلجن عن حالة) -
+// لإن البلجن مفهوش نداء "checkPermissions" منفصل زي بلجن الموقع العادي. لو
+// نجح، يبقى الإذن ممنوح فعلًا (وكمان يبقى التتبع شغال بالفعل - مفيش تكرار).
+// لو فشل برسالة NOT_AUTHORIZED، يبقى الإذن مرفوض. لو مفيش رد خالص خلال مهلة
+// معقولة (البلجن مش متاح أو بطيء لأي سبب)، منمنعش الطيار من استخدام البرنامج
+// عشان مشكلة تقنية مش في إيده - فشل آمن (fail-open) في الحالة دي بس
+function checkBackgroundLocationOk() {
+    if (!isRunningInsideNativeApp()) return Promise.resolve({ ok: true });
+    var bg = window.Capacitor.Plugins && window.Capacitor.Plugins.BackgroundGeolocation;
+    if (!bg) return Promise.resolve({ ok: true });
+    if (riderBgGeoWatcherId !== null) return Promise.resolve({ ok: true }); // شغال بالفعل يبقى الإذن ممنوح
+    return new Promise(function (resolve) {
+        var settled = false;
+        var safetyTimer = setTimeout(function () { if (!settled) { settled = true; resolve({ ok: true }); } }, 8000);
+        try {
+            bg.addWatcher({
+                backgroundTitle: 'جبهالي ريدر - التتبع شغال',
+                backgroundMessage: 'بيتم تتبع موقعك عشان يوصل تحديث حي بمكانك للعميل حتى لو الشاشة مقفولة',
+                requestPermissions: true,
+                stale: false,
+                distanceFilter: 15
+            }, function (location, error) {
+                if (settled) return;
+                if (error) { settled = true; clearTimeout(safetyTimer); resolve({ ok: false }); return; }
+                if (location) {
+                    settled = true; clearTimeout(safetyTimer);
+                    var accNow = (typeof location.accuracy === 'number') ? location.accuracy : null;
+                    processGlobalPositionFix_(location.latitude, location.longitude, accNow);
+                    resolve({ ok: true });
+                }
+            }).then(function (id) { riderBgGeoWatcherId = id; }).catch(function () {
+                if (!settled) { settled = true; clearTimeout(safetyTimer); resolve({ ok: false }); }
+            });
+        } catch (e) {
+            if (!settled) { settled = true; clearTimeout(safetyTimer); resolve({ ok: true }); }
+        }
+    });
 }
 
 async function runMandatoryPermissionGate() {
@@ -2438,7 +2505,11 @@ async function runMandatoryPermissionGate() {
     if (gpsOff) { showMandatoryGate('gps-off'); mgRunning = false; return; }
     if (!locGranted) { showMandatoryGate('denied'); mgRunning = false; return; }
 
-    // 🆕 وصلنا هنا يبقى الإذن والـ GPS اتأكدنا منهم فعلاً
+    // 🆕 الإذن العادي والـ GPS تمام - دلوقتي نتأكد كمان من إذن "طوال الوقت"
+    var bgResult = await checkBackgroundLocationOk();
+    if (!bgResult.ok) { showMandatoryGate('bg-location'); mgRunning = false; return; }
+
+    // 🆕 وصلنا هنا يبقى كل الأذونات (عادي + GPS + طوال الوقت) اتأكدنا منهم فعلاً
     hideMandatoryGate();
     startGlobalPositionWatch();
     mgRunning = false;
@@ -3393,8 +3464,9 @@ async function startRiderLiveTracking() {
     startCompassTracking();
     if (riderGeoWatchId !== null) return;
     // 🆕 نوقف المتتبع "الخفيف" العام وقت ما تبويب الخريطة شغال - عشان منفضلش عندنا نبضتين GPS مستقلتين
-    // شغالين في نفس الوقت (كانوا بيتنافسوا مع بعض وده جزء من سبب اختلاف الرقم بين الخريطة والعميل)
-    if (riderGlobalWatchId !== null && navigator.geolocation) { navigator.geolocation.clearWatch(riderGlobalWatchId); riderGlobalWatchId = null; }
+    // شغالين في نفس الوقت (كانوا بيتنافسوا مع بعض وده جزء من سبب اختلاف الرقم بين الخريطة والعميل).
+    // stopGlobalPositionWatch() بتوقف سواء متتبع الخلفية أو الاحتياطي العادي، أيًا كان الشغال
+    stopGlobalPositionWatch();
     riderGeoWatchId = navigator.geolocation.watchPosition(function (pos) {
         var lat = pos.coords.latitude, lng = pos.coords.longitude;
         if (!riderMapInstance || !riderMapMarkersLayer) return;
@@ -3571,41 +3643,103 @@ function teardownRiderMap() {
 }
 // ============== نهاية تبويب الخريطة ==============
 
-// ============== 🆕 نظام مواقع خفيف لكارت الطلب (شغال طول الوقت، مش مربوط بتبويب الخريطة) ==============
+// ============== 🆕 نظام مواقع خفيف لكارت الطلب + تتبع حي حتى في الخلفية ==============
+// (شغال طول الوقت، مش مربوط بتبويب الخريطة، وبيفضل شغال حتى لو الشاشة اتقفلت
+// أو التطبيق راح للخلفية أو المندوب سحبه من شاشة التطبيقات الأخيرة - بفضل خدمة
+// تتبع حقيقية (Foreground Service عبر بلجن @capacitor-community/background-geolocation)
+// بدل GPS العادي اللي بيوقف فورًا أول ما التطبيق يخرج من المقدمة. ده اللي بيخلي
+// كارت الطلب والمسافة المتبقية عند العميل يفضلوا بيتحدثوا حتى لو المندوب مفتحش
+// البرنامج تاني. ملحوظة مهمة: زي أي تطبيق توصيل تاني (أوبر/كريم..)، ده بيشتغل
+// طول ما التطبيق شغال في الخلفية أو الشاشة مقفولة - لكن مفيش تطبيق يقدر يفضل
+// شغال لو المستخدم قفله بالكامل من "إيقاف إجباري" في إعدادات الهاتف نفسها، ده
+// قيد نظام تشغيل أندرويد مش حاجة أي تطبيق يقدر يتخطاها
 var riderGlobalPos = null;
-var riderGlobalWatchId = null;
+var riderGlobalWatchId = null; // احتياطي: مُعرّف GPS العادي (لو استخدمناه)
+var riderBgGeoWatcherId = null; // 🆕 مُعرّف متتبع الخلفية (نص، من بلجن الخدمة)
 var riderGlobalLastRawFixTime = 0;
 var riderGlobalBadFixStreak = 0;
 
+// 🆕 المنطق المشترك لأي قراءة GPS جديدة (سواء جاية من متتبع الخلفية أو الاحتياطي)
+function processGlobalPositionFix_(lat, lng, accNow) {
+    // نفس فلترة الدقة اللي في متتبع الخريطة بالظبط - عشان الرقم اللي بيوصل للعميل
+    // (لما تبويب الخريطة يكون مقفول) يفضل دقيق برده ومايتلخبطش بقراءة GPS رديئة لحظية
+    var nowRaw = Date.now();
+    if (riderGlobalPos) {
+        var jumpKm = haversineKm(riderGlobalPos.lat, riderGlobalPos.lng, lat, lng);
+        var secsSinceLast = riderGlobalLastRawFixTime ? Math.max(0.4, (nowRaw - riderGlobalLastRawFixTime) / 1000) : 1.5;
+        var impliedSpeedKmh = (jumpKm / secsSinceLast) * 3600;
+        var badAccuracy = (accNow !== null && accNow > RIDER_MAX_GPS_ACCURACY_M);
+        var impossibleJump = impliedSpeedKmh > RIDER_MAX_PLAUSIBLE_SPEED_KMH;
+        if (badAccuracy || impossibleJump) {
+            riderGlobalBadFixStreak++;
+            if (riderGlobalBadFixStreak < 5) { return; }
+        } else {
+            riderGlobalBadFixStreak = 0;
+        }
+    }
+    riderGlobalLastRawFixTime = nowRaw;
+    // نحاول نلزق مكانك على أقرب شارع من شبكة الشوارع المحفوظة حتى وإحنا مش في تبويب الخريطة
+    var snapped = snapToLocalRoadNetwork(lat, lng);
+    riderGlobalPos = snapped || { lat: lat, lng: lng };
+    refreshVisibleOrderCardDistances();
+    // 🆕 بنبعت تحديث المسافة الحية للسيرفر فورًا من هنا (مش بس مستنيين الفحص
+    // الدوري العادي) - عشان لو التطبيق في الخلفية والفحص الدوري بطّأ أو
+    // اتأجل من نظام التشغيل، تحديث المسافة عند العميل يفضل شغال طالما خدمة
+    // التتبع لسه بتجيب نقط GPS جديدة
+    try { pushLiveEtaUpdates(); } catch (e) {}
+}
+
 async function startGlobalPositionWatch() {
+    if (riderGlobalWatchId !== null || riderBgGeoWatcherId !== null) return;
+    var bg = isRunningInsideNativeApp() && window.Capacitor.Plugins && window.Capacitor.Plugins.BackgroundGeolocation;
+    if (bg) {
+        try {
+            bg.addWatcher({
+                backgroundTitle: 'جبهالي ريدر - التتبع شغال',
+                backgroundMessage: 'بيتم تتبع موقعك عشان يوصل تحديث حي بمكانك للعميل حتى لو الشاشة مقفولة',
+                requestPermissions: true,
+                stale: false,
+                distanceFilter: 15
+            }, function (location, error) {
+                if (error) {
+                    // 🆕 لو المندوب رفض إذن الموقع في الخلفية أو حصل أي خطأ، نرجع
+                    // نستخدم GPS العادي كحل احتياطي (هيشتغل طول ما البرنامج فاتح
+                    // قدامه بس) بدل ما التتبع يبطل خالص
+                    startGlobalPositionWatchFallback_();
+                    return;
+                }
+                if (!location) return;
+                var accNow = (typeof location.accuracy === 'number') ? location.accuracy : null;
+                processGlobalPositionFix_(location.latitude, location.longitude, accNow);
+            }).then(function (id) { riderBgGeoWatcherId = id; }).catch(function () {
+                startGlobalPositionWatchFallback_();
+            });
+            return;
+        } catch (e) { /* لو حصل أي خطأ غير متوقع، نرجع للطريقة الاحتياطية */ }
+    }
+    startGlobalPositionWatchFallback_();
+}
+
+// 🆕 الطريقة الاحتياطية (GPS عادي - بيشتغل بس والتطبيق في المقدمة): بتتستخدم
+// بس لو بلجن التتبع الخلفي مش متاح في البيلد ده، أو المندوب رفض إذن الموقع في
+// الخلفية تحديدًا (بيفضل قادر يستخدم البرنامج عادي برضو، بس من غير تتبع خلفي)
+async function startGlobalPositionWatchFallback_() {
     if (riderGlobalWatchId !== null || !navigator.geolocation) return;
     var ok = await ensureNativeLocationPermission();
     if (!ok) return;
     riderGlobalWatchId = navigator.geolocation.watchPosition(function (pos) {
-        var lat = pos.coords.latitude, lng = pos.coords.longitude;
-        // 🆕 نفس فلترة الدقة اللي في متتبع الخريطة بالظبط - عشان الرقم اللي بيوصل للعميل (لما تبويب
-        // الخريطة يكون مقفول) يفضل دقيق برده ومايتلخبطش بقراءة GPS رديئة لحظية
         var accNow = (typeof pos.coords.accuracy === 'number') ? pos.coords.accuracy : null;
-        var nowRaw = Date.now();
-        if (riderGlobalPos) {
-            var jumpKm = haversineKm(riderGlobalPos.lat, riderGlobalPos.lng, lat, lng);
-            var secsSinceLast = riderGlobalLastRawFixTime ? Math.max(0.4, (nowRaw - riderGlobalLastRawFixTime) / 1000) : 1.5;
-            var impliedSpeedKmh = (jumpKm / secsSinceLast) * 3600;
-            var badAccuracy = (accNow !== null && accNow > RIDER_MAX_GPS_ACCURACY_M);
-            var impossibleJump = impliedSpeedKmh > RIDER_MAX_PLAUSIBLE_SPEED_KMH;
-            if (badAccuracy || impossibleJump) {
-                riderGlobalBadFixStreak++;
-                if (riderGlobalBadFixStreak < 5) { return; }
-            } else {
-                riderGlobalBadFixStreak = 0;
-            }
-        }
-        riderGlobalLastRawFixTime = nowRaw;
-        // 🆕 نحاول نلزق مكانك على أقرب شارع من شبكة الشوارع المحفوظة حتى وإحنا مش في تبويب الخريطة
-        var snapped = snapToLocalRoadNetwork(lat, lng);
-        riderGlobalPos = snapped || { lat: lat, lng: lng };
-        refreshVisibleOrderCardDistances();
+        processGlobalPositionFix_(pos.coords.latitude, pos.coords.longitude, accNow);
     }, function (err) { console.warn('global geo watch error', err); }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 });
+}
+
+function stopGlobalPositionWatch() {
+    if (riderBgGeoWatcherId !== null) {
+        var bg = window.Capacitor.Plugins && window.Capacitor.Plugins.BackgroundGeolocation;
+        if (bg) { try { bg.removeWatcher({ id: riderBgGeoWatcherId }); } catch (e) {} }
+        riderBgGeoWatcherId = null;
+    }
+    if (riderGlobalWatchId !== null && navigator.geolocation) { navigator.geolocation.clearWatch(riderGlobalWatchId); riderGlobalWatchId = null; }
 }
 
 // 🆕 تفكيك نص تفاصيل الطلب لاسم المحل، عنوانه المكتوب، والأصناف - حسب الصيغة اللي تطبيق ماركت بيبعتها

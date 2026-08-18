@@ -64,10 +64,14 @@ jobs:
       # "cap add android" من الصفر في كل بيلد، بنضيف الصلاحيات هنا تلقائيًا بعد كل مرة.
       # وضفنا كمان POST_NOTIFICATIONS - أندرويد 13+ (API 33) محتاجها صراحة عشان
       # التطبيق يقدر يعرض إشعارات Push من غير ما يتفتح - بالظبط زي الماركت.
+      # 🆕 التتبع في الخلفية (لما الشاشة تتقفل أو التطبيق يروح للخلفية): محتاج
+      # ACCESS_BACKGROUND_LOCATION (إذن منفصل عن إذن الموقع العادي بداية أندرويد 10)،
+      # و FOREGROUND_SERVICE عشان خدمة التتبع تقدر تشتغل وهي مش في المقدمة، و
+      # FOREGROUND_SERVICE_LOCATION (لازمة بداية أندرويد 14/API 34 لأي خدمة نوعها "location")
       - name: Add location permissions to AndroidManifest.xml
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-feature android:name="android.hardware.location.gps" android:required="false" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />#' "$MANIFEST"
+          sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />\n    <uses-feature android:name="android.hardware.location.gps" android:required="false" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />#' "$MANIFEST"
           echo "----- AndroidManifest.xml بعد التعديل -----"
           cat "$MANIFEST"
 

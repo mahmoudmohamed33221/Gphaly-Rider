@@ -8,6 +8,7 @@
     "@capacitor/push-notifications": "^8.0.0",
     "@capacitor/local-notifications": "^8.0.0",
     "@capacitor/geolocation": "^8.0.0",
+    "@capacitor-community/background-geolocation": "^1.2.23",
     "@capacitor/filesystem": "^8.0.0",
     "@capacitor/clipboard": "^8.0.0",
     "@capgo/capacitor-inappbrowser": "^8.0.0"

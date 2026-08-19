@@ -7,6 +7,7 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
@@ -39,6 +40,12 @@ import android.graphics.drawable.GradientDrawable;
 // =========================================================================
 public class FloatingBubbleService extends Service {
 
+    // 🆕 أوامر التحكم في ظهور دائرة البابل من غير ما توقف الخدمة نفسها
+    public static final String ACTION_SHOW_BUBBLE = "com.mgaper.gphalyrider.SHOW_BUBBLE";
+    public static final String ACTION_HIDE_BUBBLE = "com.mgaper.gphalyrider.HIDE_BUBBLE";
+    private static final String PREFS_NAME = "gphaly_rider_bubble_prefs";
+    private static final String PREF_VISIBLE = "bubble_visible";
+
     private WindowManager windowManager;
     private FrameLayout bubbleView;
     private WindowManager.LayoutParams params;
@@ -61,15 +68,52 @@ public class FloatingBubbleService extends Service {
     public void onCreate() {
         super.onCreate();
         startForegroundServiceCompat();
-        showBubble();
+        // 🆕 أول ما الخدمة تتنشئ، نرجّع آخر حالة ظهور معروفة للبابل (لو الخدمة كانت
+        // اتقفلت من النظام وبترجع تشتغل تاني لوحدها - START_STICKY أو onTaskRemoved)
+        if (getBubbleVisiblePref()) { showBubble(); } else { hideBubbleView(); }
         startLocationHeartbeat();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent != null && ACTION_SHOW_BUBBLE.equals(intent.getAction())) {
+            setBubbleVisiblePref(true);
+            showBubble();
+        } else if (intent != null && ACTION_HIDE_BUBBLE.equals(intent.getAction())) {
+            setBubbleVisiblePref(false);
+            hideBubbleView();
+        }
         // 🆕 START_STICKY: لو نظام التشغيل قفل الخدمة عشان الذاكرة، أندرويد
         // هيحاول يرجّعها تشتغل تاني لوحده أول ما الموارد تتوفر
         return START_STICKY;
+    }
+
+    // 🆕 لو المندوب مسح التطبيق من قائمة التطبيقات الأخيرة (Recents)، الخدمة دي
+    // لسه شغالة (لإنها Foreground Service منفصلة عن الـ Activity)، بس بعض
+    // إصدارات أندرويد ممكن تحاول توقفها. نعيد تشغيلها فورًا هنا للتأكيد - "زي
+    // مشغل الأغاني بالظبط" اللي بيفضل شغال حتى لو مسحت التطبيق من الأخيرة
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        super.onTaskRemoved(rootIntent);
+        Intent restartIntent = new Intent(getApplicationContext(), FloatingBubbleService.class);
+        restartIntent.setPackage(getPackageName());
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            getApplicationContext().startForegroundService(restartIntent);
+        } else {
+            getApplicationContext().startService(restartIntent);
+        }
+    }
+
+    private boolean getBubbleVisiblePref() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        // 🆕 لو مفيش قيمة محفوظة لسه (أول مرة)، الافتراضي "مخفية" لإن الغالب إن
+        // الخدمة بتبدأ والتطبيق مفتوح قدام المندوب أصلًا
+        return prefs.getBoolean(PREF_VISIBLE, false);
+    }
+
+    private void setBubbleVisiblePref(boolean visible) {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        prefs.edit().putBoolean(PREF_VISIBLE, visible).apply();
     }
 
     // 🆕 حلقة النبضة: كل 15 ثانية نطلب قراءة موقع واحدة (مش تتبع مستمر - أخف على
@@ -127,7 +171,9 @@ public class FloatingBubbleService extends Service {
     private void startForegroundServiceCompat() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "جبهالي ريدر - شغال", NotificationManager.IMPORTANCE_MIN);
+            // 🆕 IMPORTANCE_LOW (مش MIN) - عشان الإشعار الثابت يفضل ظاهر وواضح في
+            // شريط الإشعارات زي إشعار مشغل الأغاني بالظبط، من غير صوت أو اهتزاز
+            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "جبهالي ريدر - شغال في الخلفية", NotificationManager.IMPORTANCE_LOW);
             channel.setShowBadge(false);
             nm.createNotificationChannel(channel);
         }
@@ -137,7 +183,7 @@ public class FloatingBubbleService extends Service {
         PendingIntent pi = PendingIntent.getActivity(this, 0, openIntent, piFlags);
         Notification notification = new Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle("جبهالي ريدر شغال")
-                .setContentText("التطبيق شغال في الخلفية - دوس هنا أو على الأيقونة العائمة للرجوع")
+                .setContentText("التتبع الحي والإشعارات شغالين - دوس هنا للرجوع للبرنامج")
                 .setSmallIcon(getApplicationInfo().icon)
                 .setContentIntent(pi)
                 .setOngoing(true)
@@ -157,13 +203,14 @@ public class FloatingBubbleService extends Service {
 
         GradientDrawable bg = new GradientDrawable();
         bg.setShape(GradientDrawable.OVAL);
-        bg.setColor(Color.parseColor("#0EA5A5")); // 🆕 لون التطبيق الأساسي (تركواز/سيان)
+        bg.setColor(Color.BLACK); // 🆕 خلفية سودة زي ما اتطلب
         bg.setStroke(dp(2), Color.WHITE);
         bubbleView.setBackground(bg);
         bubbleView.setElevation(dp(6));
 
         ImageView icon = new ImageView(this);
-        FrameLayout.LayoutParams iconParams = new FrameLayout.LayoutParams((int) (size * 0.6), (int) (size * 0.6));
+        // 🆕 اللوجو بقى أكبر جوه الدائرة (كان 0.6 بقى 0.86) عشان يملأ المساحة أكتر
+        FrameLayout.LayoutParams iconParams = new FrameLayout.LayoutParams((int) (size * 0.86), (int) (size * 0.86));
         iconParams.gravity = Gravity.CENTER;
         icon.setLayoutParams(iconParams);
         try { icon.setImageResource(getApplicationInfo().icon); } catch (Exception e) {}
@@ -224,6 +271,16 @@ public class FloatingBubbleService extends Service {
         try { windowManager.addView(bubbleView, params); } catch (Exception e) {
             // 🆕 لو حصل أي خطأ (مثلاً الإذن اتشال فجأة)، نوقف الخدمة بدل ما تفضل معلّقة
             stopSelf();
+        }
+    }
+
+    // 🆕 بتشيل دائرة البابل من على الشاشة بس (view واحدة) - من غير ما توقف الخدمة
+    // نفسها ولا الإشعار الثابت ولا نبضة الموقع. لو الطيار فاتح التطبيق نفسه،
+    // مفيش داعي دائرة إضافية تتراكب فوق واجهة البرنامج
+    private void hideBubbleView() {
+        if (bubbleView != null && windowManager != null) {
+            try { windowManager.removeView(bubbleView); } catch (Exception e) {}
+            bubbleView = null;
         }
     }
 

@@ -795,7 +795,7 @@
 </div>
 
 <script>
-var GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyOubBCqFjFLY7Ysul-eyWB8KKi7GB96tiQYm8hAno4OYyI2rlSpWmBJACYp7xqg97bQg/exec";
+var GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzmu80J-LVxauupp2UMQk1ydvrQn89NO2gwi5EX3Peo0hkELfsXU4bw-JFv1HKdurAl_A/exec";
 var APP_VERSION = "3.0.1"; // لازم يطابق قيمة الخلية D2 في الشيت، وإلا هيظهر تحديث إجباري
 
 // ⚡ عزل بيانات كل طيار عن التاني على نفس الجهاز: كل بيانات الطيار (أرباح/سجل/طلبات...) بتتخزن
@@ -2457,7 +2457,7 @@ function checkBackgroundLocationOk() {
                 backgroundMessage: 'بيتم تتبع موقعك عشان يوصل تحديث حي بمكانك للعميل حتى لو الشاشة مقفولة',
                 requestPermissions: true,
                 stale: false,
-                distanceFilter: 15
+                distanceFilter: 5 // 🆕 قللناها من 15 لـ 5 - عشان لو المندوب واقف يشتغل تقريبًا (فرملة عند إشارة، انتظار عند المحل)، الاهتزاز الطبيعي لقراءة GPS يكفي يطلع تحديث بدل ما يفضل ساكت فترة طويلة
             }, function (location, error) {
                 if (settled) return;
                 if (error) { settled = true; clearTimeout(safetyTimer); resolve({ ok: false }); return; }
@@ -2515,10 +2515,55 @@ async function runMandatoryPermissionGate() {
     mgRunning = false;
 }
 
+// =========================================================================
+// 🆕 الأيقونة العائمة (زي شات الفيسبوك العائم بالظبط) - بتفضل شغالة طول ما
+// المندوب مسجل دخول، حتى وهو برّا البرنامج تمامًا. طلب إذن "الرسم فوق
+// التطبيقات الأخرى" مش إجباري زي إذن الموقع - لو المندوب رفضه، البرنامج بيشتغل
+// عادي من غيرها، بس بدون الأيقونة العائمة نفسها.
+// =========================================================================
+// بتتنفذ مرة واحدة بس عند فتح التطبيق - بتطلب الإذن (بتفتح شاشة نظام) لو مش
+// ممنوح، وبعدين تشغّل الأيقونة
+async function ensureFloatingBubble() {
+    if (!isRunningInsideNativeApp()) return;
+    var fb = window.Capacitor.Plugins && window.Capacitor.Plugins.FloatingBubble;
+    if (!fb) return;
+    try {
+        var status = await fb.checkOverlayPermission();
+        if (!status.granted) { status = await fb.requestOverlayPermission(); }
+        if (status.granted) { await fb.startBubble(); }
+    } catch (e) { /* مش إجباري - نكمل عادي لو حصل أي مشكلة */ }
+    // 🆕 نبضة الموقع الزمنية الثابتة (كل 15 ثانية، من غدمة الأيقونة العائمة نفسها):
+    // بتوصل هنا بغض النظر عن حركة المندوب أو حالة الشاشة/البرنامج، طول ما
+    // الخدمة شغالة - عشان تتبع العميل يفضل شغال "علطول" زي أغنية شغالة والشاشة
+    // مقفولة، مش بس لما فيه حركة فعلية. بنستخدم نفس منطق معالجة القراءة
+    // الموجود بالفعل (processGlobalPositionFix_) عشان الفلترة والدقة ونظام
+    // الالتصاق بالشارع يفضلوا شغالين زي ما هما بالظبط
+    try {
+        fb.addListener('locationHeartbeat', function (data) {
+            if (!data || typeof data.lat !== 'number' || typeof data.lng !== 'number') return;
+            var acc = (typeof data.accuracy === 'number') ? data.accuracy : null;
+            processGlobalPositionFix_(data.lat, data.lng, acc);
+        });
+    } catch (e) {}
+}
+// 🆕 فحص خفيف بيتكرر (من غير ما يطلب الإذن تاني أبدًا لو المندوب رفضه قبل كده) -
+// بيشتغل الأيقونة تاني تلقائيًا لو لأي سبب الخدمة وقفت (مثلاً نظام التشغيل قفلها
+// وقت ضغط شديد على الذاكرة) - عشان تفضل شغالة "علطول" زي ما اتطلب بالظبط
+async function ensureFloatingBubbleAlive() {
+    if (!isRunningInsideNativeApp()) return;
+    var fb = window.Capacitor.Plugins && window.Capacitor.Plugins.FloatingBubble;
+    if (!fb) return;
+    try {
+        var status = await fb.checkOverlayPermission();
+        if (status.granted) { await fb.startBubble(); }
+    } catch (e) {}
+}
+
 async function silentPermissionRecheck() {
     if (!isRunningInsideNativeApp() || document.visibilityState !== 'visible') return;
     var result = await checkGpsAndPermissionOk();
     if (!result.ok) { runMandatoryPermissionGate(); }
+    ensureFloatingBubbleAlive();
 }
 // ============== نهاية بوابة الأذونات الإجبارية ==============
 
@@ -3699,7 +3744,7 @@ async function startGlobalPositionWatch() {
                 backgroundMessage: 'بيتم تتبع موقعك عشان يوصل تحديث حي بمكانك للعميل حتى لو الشاشة مقفولة',
                 requestPermissions: true,
                 stale: false,
-                distanceFilter: 15
+                distanceFilter: 5 // 🆕 قللناها من 15 لـ 5 لنفس السبب
             }, function (location, error) {
                 if (error) {
                     // 🆕 لو المندوب رفض إذن الموقع في الخلفية أو حصل أي خطأ، نرجع
@@ -5037,6 +5082,7 @@ function init() {
     registerPushNotifications(); // 🆕 تسجيل توكن إشعارات الطيار - بعد ما نتأكد إن رقم تليفونه معروف (بعد تسجيل الدخول)
     try { startRCPresenceHeartbeat(); } catch(e) {} // 🆕 نبضة الحضور العامة - أساس الصحين الرمادي الجديد
     runMandatoryPermissionGate(); // 🆕 بوابة GPS/الموقع الإجبارية - أول حاجة تحصل قبل أي حاجة تانية
+    ensureFloatingBubble(); // 🆕 الأيقونة العائمة - بتفضل شغالة حتى برّا البرنامج
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') { silentPermissionRecheck(); } });
     if (mgIntervalId) clearInterval(mgIntervalId);
     mgIntervalId = setInterval(silentPermissionRecheck, 5000);

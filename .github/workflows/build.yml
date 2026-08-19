@@ -75,9 +75,88 @@ jobs:
           echo "----- AndroidManifest.xml بعد التعديل -----"
           cat "$MANIFEST"
 
-      # 🆕 حل أضمن للمفتاح الثابت: بدل ما نعتمد على مكان افتراضي (~/.android/debug.keystore)
-      # اللي مش متأكدين إنه بيتاخد في الاعتبار دايمًا، بنخلي ملف بناء المشروع نفسه (build.gradle)
-      # يستخدم المفتاح الثابت صراحة. كده مضمون 100% إن كل نسخة هتتوقع بنفس الشهادة.
+      # 🆕 الأيقونة العائمة (Floating Bubble) - كود Android أصلي مش بيتولّد تلقائيًا
+      # من Capacitor، فبننسخه يدويًا لمجلد المشروع بعد ما "cap add android" يعمل
+      # الهيكل الأساسي، وبنسجّله كـ Capacitor Plugin جوه MainActivity، وبنضيف
+      # صلاحية "الرسم فوق التطبيقات الأخرى" وتعريف الخدمة في الـ Manifest، وبنخلي
+      # الـ Activity الرئيسية "singleTask" عشان دوسة الأيقونة العائمة ترجّع نفس
+      # النسخة الشغالة فعلًا (وتحافظ على حالة الـ JS) بدل ما تفتح نسخة جديدة
+      - name: Add floating bubble native plugin
+        run: |
+          PKG_DIR="android/app/src/main/java/com/mgaper/gphalyrider"
+          mkdir -p "$PKG_DIR"
+          cp android-native/FloatingBubbleService.java "$PKG_DIR/FloatingBubbleService.java"
+          cp android-native/FloatingBubblePlugin.java "$PKG_DIR/FloatingBubblePlugin.java"
+
+          if [ -f "$PKG_DIR/MainActivity.java" ] || [ -f "$PKG_DIR/MainActivity.kt" ]; then
+            python3 - <<'PYEOF'
+          import os, re
+          pkg_dir = "android/app/src/main/java/com/mgaper/gphalyrider"
+          path = None
+          for candidate in [os.path.join(pkg_dir, "MainActivity.java"), os.path.join(pkg_dir, "MainActivity.kt")]:
+              if os.path.exists(candidate):
+                  path = candidate
+                  break
+          content = open(path, encoding='utf-8').read()
+
+          # القالب الافتراضي لـ Capacitor الحديث غالبًا بيبقى سطر واحد فاضي من غير
+          # onCreate خالص - لو حاولنا ندخل السطر جوه onCreate موجود مش هنلاقي حاجة
+          # نطابقها. الكود ده بيتعامل مع الحالتين.
+          if path.endswith('.java'):
+              if 'registerPlugin(FloatingBubblePlugin.class)' in content:
+                  pass
+              elif 'super.onCreate(savedInstanceState)' in content:
+                  content = content.replace(
+                      'super.onCreate(savedInstanceState);',
+                      'registerPlugin(FloatingBubblePlugin.class);\n        super.onCreate(savedInstanceState);',
+                      1
+                  )
+              else:
+                  content = re.sub(
+                      r'public class MainActivity extends BridgeActivity\s*\{\s*\}',
+                      'public class MainActivity extends BridgeActivity {\n'
+                      '    @Override\n'
+                      '    public void onCreate(android.os.Bundle savedInstanceState) {\n'
+                      '        registerPlugin(FloatingBubblePlugin.class);\n'
+                      '        super.onCreate(savedInstanceState);\n'
+                      '    }\n'
+                      '}',
+                      content
+                  )
+          else:
+              if 'registerPlugin(FloatingBubblePlugin::class.java)' in content:
+                  pass
+              elif 'super.onCreate(savedInstanceState)' in content:
+                  content = content.replace(
+                      'super.onCreate(savedInstanceState)',
+                      'registerPlugin(FloatingBubblePlugin::class.java)\n        super.onCreate(savedInstanceState)',
+                      1
+                  )
+              else:
+                  content = re.sub(
+                      r'class MainActivity\s*:\s*BridgeActivity\(\)\s*\{?\s*\}?',
+                      'class MainActivity : BridgeActivity() {\n'
+                      '    override fun onCreate(savedInstanceState: android.os.Bundle?) {\n'
+                      '        registerPlugin(FloatingBubblePlugin::class.java)\n'
+                      '        super.onCreate(savedInstanceState)\n'
+                      '    }\n'
+                      '}',
+                      content
+                  )
+
+          open(path, 'w', encoding='utf-8').write(content)
+          print("----- MainActivity بعد التعديل -----")
+          print(content)
+          PYEOF
+          fi
+
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i 's#<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />#<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />#' "$MANIFEST"
+          sed -i 's#android:name=".MainActivity"#android:name=".MainActivity"\n            android:launchMode="singleTask"#' "$MANIFEST"
+          sed -i 's#</application>#    <service\n        android:name=".FloatingBubbleService"\n        android:enabled="true"\n        android:exported="false"\n        android:foregroundServiceType="specialUse">\n        <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="floating_bubble_overlay" />\n    </service>\n</application>#' "$MANIFEST"
+          echo "----- AndroidManifest.xml بعد التعديل -----"
+          cat "$MANIFEST"
+
       - name: Force fixed signing config in build.gradle
         run: |
           cat >> android/app/build.gradle << 'EOF'

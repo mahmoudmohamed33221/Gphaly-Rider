@@ -1437,6 +1437,13 @@ function openStatusInfoModal(title, msg, type) {
 }
 
 function logoutPilot() {
+    // 🆕 نوقف خدمة الخلفية والبابل نهائيًا وقت تسجيل الخروج بس - غير كده الخدمة
+    // المفروض تفضل شغالة "علطول" زي ما اتطلب، حتى لو قفل الشاشة أو مسح
+    // التطبيق من قائمة التطبيقات الأخيرة
+    try {
+        var fb = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.FloatingBubble;
+        if (fb && fb.stopBubble) fb.stopBubble();
+    } catch (e) {}
     localStorage.removeItem('gebhaly_pilot_session');
     localStorage.removeItem('gebhaly_pilot_full_data');
     closeDrawer();
@@ -2369,33 +2376,37 @@ async function ensureNativeLocationPermission() {
 }
 
 // =========================================================================
-// 🆕 بوابة الأذونات الإجبارية (نفس نظام جبهالي ماركت بالظبط) - شغالة جوه الـ APK بس.
-// أول ما التطبيق يتفتح: بيطلب صلاحية الإشعارات ثم صلاحية الموقع ورا بعض تلقائيًا،
-// ومينفعش الطيار يستخدم البرنامج غير لو الموقع متسمح بيه والـ GPS شغال فعليًا (عشان
-// التوصيل والتتبع الحي محتاجين GPS شغال طول الوقت). وطول ما التطبيق مفتوح، بيتعمل
-// فحص دوري كل فترة، فلو الطيار قفل صلاحية الموقع أو قفل الـ GPS من نص الاستخدام،
-// هتظهرله البوابة تاني تطلب منه يرجع يفعّلها.
-// 🆕 وبقى كمان مينفعش يستخدم البرنامج غير لو وافق على صلاحية الموقع "طوال الوقت"
-// (Allow all the time) - مش بس "أثناء استخدام البرنامج" - لإن من غيرها خط سير
-// المندوب هيتوقف عند العميل أول ما يقفل الشاشة، وده بالظبط أصل المشكلة اللي
-// البوابة دي اتعملت عشانها. نفس مبدأ إجبارية الـ GPS بالظبط: بوابة كاملة الشاشة
-// من غير أي إمكانية تخطي لحد ما يوافق فعليًا
+// 🆕 بوابة الأذونات الإجبارية - شغالة جوه الـ APK بس. كل الأذونات دلوقتي إجبارية
+// 100% من غير أي استثناء: الإشعارات، إذن "الظهور فوق التطبيقات الأخرى" (اللازم
+// عشان الأيقونة العائمة تشتغل)، صلاحية الموقع، تشغيل الـ GPS فعليًا، وصلاحية
+// الموقع "طوال الوقت". لو أي صلاحية من دول ناقصة - أي وقت، سواء أول ما يفتح
+// التطبيق أو في نص الاستخدام - بتظهر شاشة كاملة غير قابلة للتخطي، بتوضح بالظبط
+// الصلاحية الناقصة، ومفيش أي طريقة يتخطاها غير إنه يديها فعليًا.
+// 🆕 زرار "حاول تاني": أول دوسة بتعمل إعادة فحص هادئة، ولو لسه الصلاحية مش
+// متفعّلة بيروح بيه على طول لمكان الصلاحية بالظبط جوه إعدادات الهاتف (مش رسالة
+// نصية بس) - عشان يقدر يفعّلها من هناك ويرجع يدوس تاني.
 // =========================================================================
-var mgRunning = false, mgIntervalId = null;
+var mgRunning = false, mgIntervalId = null, mgLastReason = null;
 
 function showMandatoryGate(state) {
     var gate = document.getElementById('mandatory-gate');
     var content = document.getElementById('mg-content');
     if (state === 'checking') {
-        content.innerHTML = '<div class="mg-spinner"></div><div class="mg-title">بنجهزلك التطبيق...</div><div class="mg-text">بنتأكد من صلاحيات الإشعارات والموقع، ثواني بسيطة 🙏</div>';
+        content.innerHTML = '<div class="mg-spinner"></div><div class="mg-title">بنجهزلك التطبيق...</div><div class="mg-text">بنتأكد من كل الأذونات المطلوبة، ثواني بسيطة 🙏</div>';
+    } else if (state === 'notif') {
+        content.innerHTML = '<i class="fa-solid fa-bell mg-icon is-error"></i><div class="mg-title">لازم تسمح بصلاحية الإشعارات</div><div class="mg-text">التطبيق محتاج إذن الإشعارات عشان يوصلّك تنبيه فوري بأي طلب جديد أول ما ييجي. دوس الزرار تحت - لو الإذن لسه متقفل هيوديك لشاشة الإشعارات في إعدادات الهاتف على طول.</div><button type="button" class="mg-btn" onclick="retryGateStep()">حاول تاني</button>';
+    } else if (state === 'overlay') {
+        content.innerHTML = '<i class="fa-solid fa-layer-group mg-icon is-error"></i><div class="mg-title">لازم تسمح بالظهور فوق التطبيقات الأخرى</div><div class="mg-text">عشان تقدر ترجع لبرنامج جبهالي ريدر بضغطة واحدة وانت شغال برّه (فاتح تطبيق تاني أو الشاشة الرئيسية)، لازم تفعّل إذن "الظهور فوق التطبيقات الأخرى". دوس الزرار تحت - لو الإذن لسه متقفل هيوديك للشاشة المطلوبة على طول.</div><button type="button" class="mg-btn" onclick="retryGateStep()">حاول تاني</button>';
+    } else if (state === 'battery') {
+        content.innerHTML = '<i class="fa-solid fa-battery-full mg-icon is-error"></i><div class="mg-title">لازم تشيل تحسين البطارية عن التطبيق</div><div class="mg-text">عشان البرنامج يفضل شغال في الخلفية "علطول" زي مشغل الأغاني بالظبط - من غير ما نظام التشغيل يقفله لوحده - لازم تختار "بدون تقييد" أو "السماح" في شاشة استهلاك البطارية اللي هتفتحلك. دوس الزرار تحت.</div><button type="button" class="mg-btn" onclick="retryGateStep()">حاول تاني</button>';
     } else if (state === 'denied') {
-        content.innerHTML = '<i class="fa-solid fa-map-marker-alt mg-icon is-error"></i><div class="mg-title">لازم تسمح بصلاحية الموقع</div><div class="mg-text">التطبيق محتاج صلاحية الموقع عشان يقدر يتتبع رحلتك ويوصّلك بدقة للمحل والعميل. لو دوست "لا تسمح" بالغلط، افتح: إعدادات الهاتف ← التطبيقات ← جبهالي ريدر ← الأذونات ← فعّل "الموقع"، وبعدين ارجع دوس الزرار تحت.</div><button type="button" class="mg-btn" onclick="runMandatoryPermissionGate()">حاول تاني</button>';
+        content.innerHTML = '<i class="fa-solid fa-map-marker-alt mg-icon is-error"></i><div class="mg-title">لازم تسمح بصلاحية الموقع</div><div class="mg-text">التطبيق محتاج صلاحية الموقع عشان يقدر يتتبع رحلتك ويوصّلك بدقة للمحل والعميل. دوس الزرار تحت - لو الإذن لسه متقفل هيوديك لشاشة أذونات التطبيق في إعدادات الهاتف على طول.</div><button type="button" class="mg-btn" onclick="retryGateStep()">حاول تاني</button>';
     } else if (state === 'gps-off') {
-        content.innerHTML = '<i class="fa-solid fa-location-crosshairs mg-icon is-error"></i><div class="mg-title">خدمة الموقع (GPS) مقفولة</div><div class="mg-text">من فضلك فعّل خدمة تحديد الموقع (GPS) من هاتفك عشان تقدر تستخدم التطبيق: افتح شريط الإشعارات السريع من أعلى الشاشة ودوس على أيقونة "الموقع"، وبعدين ارجع دوس الزرار تحت.</div><button type="button" class="mg-btn" onclick="runMandatoryPermissionGate()">حاول تاني</button>';
+        content.innerHTML = '<i class="fa-solid fa-location-crosshairs mg-icon is-error"></i><div class="mg-title">خدمة الموقع (GPS) مقفولة</div><div class="mg-text">من فضلك فعّل خدمة تحديد الموقع (GPS) من هاتفك عشان تقدر تستخدم التطبيق. دوس الزرار تحت - لو لسه مقفولة هيوديك لشاشة تفعيل الـ GPS على طول.</div><button type="button" class="mg-btn" onclick="retryGateStep()">حاول تاني</button>';
     } else if (state === 'bg-location') {
         // 🆕 لازم "طوال الوقت" مش بس "أثناء الاستخدام" - عشان تتبع رحلتك يفضل شغال
         // عند العميل حتى لو قفلت الشاشة أو خرجت من البرنامج
-        content.innerHTML = '<i class="fa-solid fa-satellite-dish mg-icon is-error"></i><div class="mg-title">لازم تفعّل صلاحية الموقع "طوال الوقت"</div><div class="mg-text">عشان العميل يقدر يتابع رحلتك حتى لو قفلت الشاشة أو خرجت من البرنامج، لازم تختار "السماح طوال الوقت" لصلاحية الموقع (مش "أثناء استخدام البرنامج" بس). دوس الزرار تحت يفتحلك شاشة الأذونات، اختار "Allow all the time" / "السماح طوال الوقت"، وبعدين ارجع للبرنامج.</div><button type="button" class="mg-btn" onclick="openBgLocationSettings()">افتح إعدادات الصلاحية</button><button type="button" class="mg-btn mg-btn-secondary" onclick="runMandatoryPermissionGate()">حاول تاني</button>';
+        content.innerHTML = '<i class="fa-solid fa-satellite-dish mg-icon is-error"></i><div class="mg-title">لازم تفعّل صلاحية الموقع "طوال الوقت"</div><div class="mg-text">عشان العميل يقدر يتابع رحلتك حتى لو قفلت الشاشة أو خرجت من البرنامج، لازم تختار "السماح طوال الوقت" لصلاحية الموقع (مش "أثناء استخدام البرنامج" بس). دوس الزرار تحت يفتحلك شاشة الأذونات، اختار "Allow all the time" / "السماح طوال الوقت"، وبعدين ارجع للبرنامج.</div><button type="button" class="mg-btn" onclick="openBgLocationSettings()">افتح إعدادات الصلاحية</button><button type="button" class="mg-btn mg-btn-secondary" onclick="retryGateStep()">حاول تاني</button>';
     }
     gate.classList.add('show');
 }
@@ -2419,6 +2430,36 @@ async function openBgLocationSettings() {
 
 async function checkGpsAndPermissionOk() {
     if (!isRunningInsideNativeApp()) return { ok: true };
+
+    // 🆕 1) الإشعارات - إجباري 100%
+    try {
+        var notif = window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications;
+        if (notif) {
+            var ns = await notif.checkPermissions();
+            if (ns.display !== 'granted') return { ok: false, reason: 'notif' };
+        }
+    } catch (e) {}
+
+    // 🆕 2) إذن "الظهور فوق التطبيقات الأخرى" - إجباري 100% (البابل محتاجاه أصلًا)
+    try {
+        var fbp = window.Capacitor.Plugins && window.Capacitor.Plugins.FloatingBubble;
+        if (fbp) {
+            var ov = await fbp.checkOverlayPermission();
+            if (!ov.granted) return { ok: false, reason: 'overlay' };
+        }
+    } catch (e) {}
+
+    // 🆕 3) استثناء توفير البطارية - إجباري 100% (من غيره أندرويد بيقفل الخدمة
+    // والإشعارات في الخلفية بعد شوية زي أي تطبيق عادي - ده أساس إن البرنامج
+    // يفضل شغال "زي الأغنية" ومتقفلش أبدًا لوحدها)
+    try {
+        var fbp2 = window.Capacitor.Plugins && window.Capacitor.Plugins.FloatingBubble;
+        if (fbp2) {
+            var bt = await fbp2.checkBatteryOptimizationIgnored();
+            if (!bt.granted) return { ok: false, reason: 'battery' };
+        }
+    } catch (e) {}
+
     var geo = window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation;
     if (!geo) return { ok: true };
     try {
@@ -2476,21 +2517,48 @@ function checkBackgroundLocationOk() {
     });
 }
 
+// 🆕 السلسلة الكاملة للأذونات الإجبارية بترتيب: الإشعارات ← الظهور فوق
+// التطبيقات ← الموقع ← GPS ← طوال الوقت. أول واحدة ناقصة بتوقف السلسلة وتظهر
+// شاشتها، ومتكملش للي بعدها إلا بعد ما تتفعّل فعليًا
 async function runMandatoryPermissionGate() {
     if (!isRunningInsideNativeApp()) { hideMandatoryGate(); return; }
     if (mgRunning) return;
     mgRunning = true;
     showMandatoryGate('checking');
+
+    // 1) الإشعارات - إجباري
     try {
         var notif = window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications;
         if (notif) {
             var ns = await notif.checkPermissions();
-            if (ns.display !== 'granted') { await notif.requestPermissions(); }
+            if (ns.display !== 'granted') { ns = await notif.requestPermissions(); }
+            if (ns.display !== 'granted') { mgLastReason = 'notif'; showMandatoryGate('notif'); mgRunning = false; return; }
         }
-    } catch (e) { /* الإشعارات مش شرط أساسي لتشغيل البرنامج، نكمل عادي */ }
+    } catch (e) {}
 
+    // 2) إذن "الظهور فوق التطبيقات الأخرى" - إجباري (البابل محتاجاه)
+    try {
+        var fbp = window.Capacitor.Plugins && window.Capacitor.Plugins.FloatingBubble;
+        if (fbp) {
+            var ov = await fbp.checkOverlayPermission();
+            if (!ov.granted) { ov = await fbp.requestOverlayPermission(); }
+            if (!ov.granted) { mgLastReason = 'overlay'; showMandatoryGate('overlay'); mgRunning = false; return; }
+        }
+    } catch (e) {}
+
+    // 3) استثناء توفير البطارية - إجباري (أساس إن البرنامج يفضل شغال دايمًا في الخلفية)
+    try {
+        var fbp3 = window.Capacitor.Plugins && window.Capacitor.Plugins.FloatingBubble;
+        if (fbp3) {
+            var bt = await fbp3.checkBatteryOptimizationIgnored();
+            if (!bt.granted) { bt = await fbp3.requestIgnoreBatteryOptimizations(); }
+            if (!bt.granted) { mgLastReason = 'battery'; showMandatoryGate('battery'); mgRunning = false; return; }
+        }
+    } catch (e) {}
+
+    // 4) صلاحية الموقع العادية + تشغيل GPS
     var geo = window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation;
-    if (!geo) { hideMandatoryGate(); mgRunning = false; return; }
+    if (!geo) { hideMandatoryGate(); mgRunning = false; onAllMandatoryPermissionsGranted(); return; }
     var locGranted = false, gpsOff = false;
     try {
         var ls = await geo.checkPermissions();
@@ -2502,42 +2570,104 @@ async function runMandatoryPermissionGate() {
         gpsOff = true;
     }
 
-    if (gpsOff) { showMandatoryGate('gps-off'); mgRunning = false; return; }
-    if (!locGranted) { showMandatoryGate('denied'); mgRunning = false; return; }
+    if (gpsOff) { mgLastReason = 'gps-off'; showMandatoryGate('gps-off'); mgRunning = false; return; }
+    if (!locGranted) { mgLastReason = 'denied'; showMandatoryGate('denied'); mgRunning = false; return; }
 
-    // 🆕 الإذن العادي والـ GPS تمام - دلوقتي نتأكد كمان من إذن "طوال الوقت"
+    // 4) الإذن العادي والـ GPS تمام - دلوقتي نتأكد كمان من إذن "طوال الوقت"
     var bgResult = await checkBackgroundLocationOk();
-    if (!bgResult.ok) { showMandatoryGate('bg-location'); mgRunning = false; return; }
+    if (!bgResult.ok) { mgLastReason = 'bg-location'; showMandatoryGate('bg-location'); mgRunning = false; return; }
 
-    // 🆕 وصلنا هنا يبقى كل الأذونات (عادي + GPS + طوال الوقت) اتأكدنا منهم فعلاً
+    // 🆕 وصلنا هنا يبقى كل الأذونات الخمسة اتأكدنا منها فعلاً
+    mgLastReason = null;
     hideMandatoryGate();
     startGlobalPositionWatch();
     mgRunning = false;
+    onAllMandatoryPermissionsGranted();
+}
+
+// 🆕 زرار "حاول تاني": أول حاجة بيعمل فحص هادئ للصلاحية الناقصة الحالية. لو
+// لقاها اتفعّلت، يكمل السلسلة عادي. لو لسه مش متفعّلة، يوديه على طول لمكان
+// الصلاحية بالظبط جوه إعدادات الهاتف - مش مجرد رسالة نصية - عشان كل دوسة على
+// "حاول تاني" تاخده خطوة فعلية لقدام
+async function retryGateStep() {
+    if (mgRunning) return;
+    var reason = mgLastReason;
+    var fbp = window.Capacitor.Plugins && window.Capacitor.Plugins.FloatingBubble;
+
+    if (reason === 'notif') {
+        try {
+            var notif = window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications;
+            var ns = notif ? await notif.checkPermissions() : { display: 'granted' };
+            if (ns.display === 'granted') { runMandatoryPermissionGate(); return; }
+        } catch (e) {}
+        try { if (fbp && fbp.openNotificationSettings) await fbp.openNotificationSettings(); } catch (e) {}
+        return;
+    }
+
+    if (reason === 'overlay') {
+        try {
+            var ov = fbp ? await fbp.checkOverlayPermission() : { granted: true };
+            if (ov.granted) { runMandatoryPermissionGate(); return; }
+        } catch (e) {}
+        try { if (fbp) await fbp.requestOverlayPermission(); } catch (e) {}
+        return;
+    }
+
+    if (reason === 'battery') {
+        try {
+            var bt = fbp ? await fbp.checkBatteryOptimizationIgnored() : { granted: true };
+            if (bt.granted) { runMandatoryPermissionGate(); return; }
+        } catch (e) {}
+        try { if (fbp && fbp.requestIgnoreBatteryOptimizations) await fbp.requestIgnoreBatteryOptimizations(); } catch (e) {}
+        return;
+    }
+
+    if (reason === 'denied') {
+        try {
+            var geo = window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation;
+            var ls = geo ? await geo.checkPermissions() : { location: 'granted' };
+            if (ls.location === 'granted') { runMandatoryPermissionGate(); return; }
+        } catch (e) {}
+        try { if (fbp && fbp.openAppPermissionSettings) await fbp.openAppPermissionSettings(); } catch (e) {}
+        return;
+    }
+
+    if (reason === 'gps-off') {
+        try { if (fbp && fbp.openLocationSourceSettings) { await fbp.openLocationSourceSettings(); return; } } catch (e) {}
+        runMandatoryPermissionGate();
+        return;
+    }
+
+    if (reason === 'bg-location') {
+        var bgResult = await checkBackgroundLocationOk();
+        if (bgResult.ok) { runMandatoryPermissionGate(); return; }
+        openBgLocationSettings();
+        return;
+    }
+
+    runMandatoryPermissionGate();
 }
 
 // =========================================================================
-// 🆕 الأيقونة العائمة (زي شات الفيسبوك العائم بالظبط) - بتفضل شغالة طول ما
-// المندوب مسجل دخول، حتى وهو برّا البرنامج تمامًا. طلب إذن "الرسم فوق
-// التطبيقات الأخرى" مش إجباري زي إذن الموقع - لو المندوب رفضه، البرنامج بيشتغل
-// عادي من غيرها، بس بدون الأيقونة العائمة نفسها.
+// 🆕 الخدمة الأصلية دلوقتي دايمًا شغالة طول ما الطيار مسجل دخول - "زي الأغنية"
+// بالظبط: مش بتقفل من الخلفية أبدًا لوحدها (لف في التليفون، فتح تطبيقات تانية،
+// قفل الشاشة، مسح البرنامج من قائمة التطبيقات الأخيرة - كل ده متقفلش بيه). أما
+// دائرة الأيقونة العائمة نفسها (اللي بتتحرك على الشاشة) فبس بتظهر/تختفي حسب
+// إنت جوه البرنامج ولا برّه، من غير ما توقف الخدمة نفسها ولا الإشعار الثابت
+// ولا نبضة الموقع الدورية.
 // =========================================================================
-// بتتنفذ مرة واحدة بس عند فتح التطبيق - بتطلب الإذن (بتفتح شاشة نظام) لو مش
-// ممنوح، وبعدين تشغّل الأيقونة
-async function ensureFloatingBubble() {
+var fbBridgeInitialized = false;
+
+// 🆕 بيتنفذ مرة واحدة بس بعد ما كل الأذونات تتأكد - بيربط نبضة الموقع الزمنية
+// (اللي جايه من الخدمة الأصلية للأيقونة العائمة، كل 15 ثانية) بنفس منطق معالجة
+// القراءة الموجود بالفعل (processGlobalPositionFix_) عشان الفلترة والدقة ونظام
+// الالتصاق بالشارع يفضلوا شغالين زي ما هما بالظبط - بغض النظر عن حالة الشاشة
+async function initFloatingBubbleBridge() {
+    if (fbBridgeInitialized) return;
     if (!isRunningInsideNativeApp()) return;
     var fb = window.Capacitor.Plugins && window.Capacitor.Plugins.FloatingBubble;
     if (!fb) return;
-    try {
-        var status = await fb.checkOverlayPermission();
-        if (!status.granted) { status = await fb.requestOverlayPermission(); }
-        if (status.granted) { await fb.startBubble(); }
-    } catch (e) { /* مش إجباري - نكمل عادي لو حصل أي مشكلة */ }
-    // 🆕 نبضة الموقع الزمنية الثابتة (كل 15 ثانية، من غدمة الأيقونة العائمة نفسها):
-    // بتوصل هنا بغض النظر عن حركة المندوب أو حالة الشاشة/البرنامج، طول ما
-    // الخدمة شغالة - عشان تتبع العميل يفضل شغال "علطول" زي أغنية شغالة والشاشة
-    // مقفولة، مش بس لما فيه حركة فعلية. بنستخدم نفس منطق معالجة القراءة
-    // الموجود بالفعل (processGlobalPositionFix_) عشان الفلترة والدقة ونظام
-    // الالتصاق بالشارع يفضلوا شغالين زي ما هما بالظبط
+    fbBridgeInitialized = true;
     try {
         fb.addListener('locationHeartbeat', function (data) {
             if (!data || typeof data.lat !== 'number' || typeof data.lng !== 'number') return;
@@ -2546,24 +2676,41 @@ async function ensureFloatingBubble() {
         });
     } catch (e) {}
 }
-// 🆕 فحص خفيف بيتكرر (من غير ما يطلب الإذن تاني أبدًا لو المندوب رفضه قبل كده) -
-// بيشتغل الأيقونة تاني تلقائيًا لو لأي سبب الخدمة وقفت (مثلاً نظام التشغيل قفلها
-// وقت ضغط شديد على الذاكرة) - عشان تفضل شغالة "علطول" زي ما اتطلب بالظبط
-async function ensureFloatingBubbleAlive() {
+
+// 🆕 بتتأكد إن الخدمة شغالة دايمًا (مش بتوقفها أبدًا هنا)، وبتتحكم بس في ظهور
+// دائرة البابل المرئية: جوه البرنامج = مخفية، برّه البرنامج = ظاهرة. بتتنادى
+// من على كل تغيير في حالة ظهور الصفحة (visibilitychange)، وكمان دوريًا كإجراء
+// وقائي (self-healing) عشان تضمن الخدمة ترجع تشتغل فورًا لو نظام التشغيل قفلها
+// لأي سبب (ضغط ذاكرة، مسح من التطبيقات الأخيرة، إلخ)
+async function syncBubbleWithAppState() {
     if (!isRunningInsideNativeApp()) return;
     var fb = window.Capacitor.Plugins && window.Capacitor.Plugins.FloatingBubble;
     if (!fb) return;
     try {
-        var status = await fb.checkOverlayPermission();
-        if (status.granted) { await fb.startBubble(); }
+        var ov = await fb.checkOverlayPermission();
+        if (!ov.granted) return; // البوابة الإجبارية فوق هتطلب الإذن ده، مفيش داعي نعمل حاجة هنا
+        await fb.startBubble(); // 🆕 دايمًا بنتأكد إنها شغالة - لو شغالة بالفعل، النداء ده بلا أي تأثير (idempotent)
+        var isVisibleInApp = (document.visibilityState === 'visible');
+        if (fb.setBubbleVisible) { await fb.setBubbleVisible({ visible: !isVisibleInApp }); }
     } catch (e) {}
 }
 
+// 🆕 بتتنادى أول ما كل الأذونات الستة تتأكد (أول فتح، أو بعد ما يفعّل صلاحية
+// كانت ناقصة ويرجع للبرنامج)
+function onAllMandatoryPermissionsGranted() {
+    initFloatingBubbleBridge();
+    syncBubbleWithAppState();
+}
+
 async function silentPermissionRecheck() {
-    if (!isRunningInsideNativeApp() || document.visibilityState !== 'visible') return;
-    var result = await checkGpsAndPermissionOk();
-    if (!result.ok) { runMandatoryPermissionGate(); }
-    ensureFloatingBubbleAlive();
+    if (!isRunningInsideNativeApp()) return;
+    if (document.visibilityState === 'visible') {
+        var result = await checkGpsAndPermissionOk();
+        if (!result.ok) { runMandatoryPermissionGate(); return; }
+    }
+    // 🆕 إجراء وقائي دوري: نضمن إن الخدمة والإشعار الثابت شغالين طول الوقت حتى
+    // لو الفحص الكامل فوق اتخطّى (لإن الصفحة مش ظاهرة دلوقتي)
+    syncBubbleWithAppState();
 }
 // ============== نهاية بوابة الأذونات الإجبارية ==============
 
@@ -5081,9 +5228,12 @@ function init() {
     migrateOldDoneOrdersToHistoryOnce();
     registerPushNotifications(); // 🆕 تسجيل توكن إشعارات الطيار - بعد ما نتأكد إن رقم تليفونه معروف (بعد تسجيل الدخول)
     try { startRCPresenceHeartbeat(); } catch(e) {} // 🆕 نبضة الحضور العامة - أساس الصحين الرمادي الجديد
-    runMandatoryPermissionGate(); // 🆕 بوابة GPS/الموقع الإجبارية - أول حاجة تحصل قبل أي حاجة تانية
-    ensureFloatingBubble(); // 🆕 الأيقونة العائمة - بتفضل شغالة حتى برّا البرنامج
-    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') { silentPermissionRecheck(); } });
+    runMandatoryPermissionGate(); // 🆕 بوابة الأذونات الإجبارية: الإشعارات + الظهور فوق التطبيقات + الموقع + GPS + طوال الوقت - كلها إجبارية دلوقتي
+    // 🆕 البابل بقت تتقفل جوه البرنامج وتشتغل تلقائي بس وانت خارجه (تطبيق تاني/الرئيسية/الشاشة مقفولة) - أما الخدمة نفسها فدايمًا شغالة
+    document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') { silentPermissionRecheck(); }
+        syncBubbleWithAppState();
+    });
     if (mgIntervalId) clearInterval(mgIntervalId);
     mgIntervalId = setInterval(silentPermissionRecheck, 5000);
     setInterval(pushLiveEtaUpdates, RIDER_ETA_PUSH_INTERVAL_MS); // 🆕 بث مسافة الوصول الحية لتطبيق ماركت

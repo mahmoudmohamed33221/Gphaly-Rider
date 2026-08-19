@@ -11,7 +11,7 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
-import com.getcapacitor.ActivityResult;
+import androidx.activity.result.ActivityResult;
 
 // =========================================================================
 // 🆕 الجسر بين JavaScript والخدمة الأصلية للأيقونة العائمة. صلاحية "الرسم فوق

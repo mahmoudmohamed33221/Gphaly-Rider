@@ -101,6 +101,11 @@
         .sync-dot.off{background:var(--danger);animation:none;}
         .sync-txt{font-size:11px;color:var(--dim);font-weight:700;}
         @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+        /* 🆕 شارة توضح هل التتبع الخلفي الحقيقي شغال ولا التطبيق راجع للوضع الاحتياطي */
+        .bg-track-badge{font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px;display:none;align-items:center;gap:4px;cursor:pointer;white-space:nowrap;}
+        .bg-track-badge.show{display:inline-flex;}
+        .bg-track-badge.native{background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.35);}
+        .bg-track-badge.fallback{background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.35);}
         .hdr-menu{display:flex;align-items:center;}
         .menu-btn{background:none;border:none;color:var(--dim);font-size:20px;cursor:pointer;padding:6px;border-radius:8px;transition:.2s;line-height:1;}
         .menu-btn:active{color:var(--accent);background:rgba(0,230,118,.1);}
@@ -722,6 +727,7 @@
         <div style="display:flex;align-items:center;gap:5px;">
             <div class="sync-dot" id="syncDot"></div>
             <span class="sync-txt" id="syncTxt">جارٍ التحميل...</span>
+            <span class="bg-track-badge" id="bgTrackBadge" onclick="explainBgTrackBadge()"></span>
         </div>
         <button class="ref-btn" id="refBtn" onclick="manualRefresh()"><i class="fa-solid fa-arrows-rotate"></i></button>
     </div>
@@ -3881,6 +3887,32 @@ function processGlobalPositionFix_(lat, lng, accNow) {
     try { pushLiveEtaUpdates(); } catch (e) {}
 }
 
+// 🆕 شارة "التتبع الخلفي" في الهيدر - بتوضح بصراحة للمندوب هل الموقع بيتحدث
+// فعليًا وهو برّه البرنامج (native) ولا رجع للوضع الاحتياطي اللي بيوقف أول ما
+// يسيب الشاشة (fallback). كده بدل ما نخمّن، بنشوفها بالعين في أي لحظة.
+function setBgTrackMode(mode) {
+    var b = document.getElementById('bgTrackBadge');
+    if (!b) return;
+    b.classList.add('show');
+    if (mode === 'native') {
+        b.className = 'bg-track-badge show native';
+        b.innerHTML = '<i class="fa-solid fa-satellite-dish"></i> تتبع خلفي شغال';
+    } else {
+        b.className = 'bg-track-badge show fallback';
+        b.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> تتبع خلفي متوقف';
+    }
+}
+
+function explainBgTrackBadge() {
+    var b = document.getElementById('bgTrackBadge');
+    var isNative = b && b.classList.contains('native');
+    if (isNative) {
+        pushToast('التتبع الخلفي شغال - موقعك هيتحدث عند العميل حتى لو قفلت الشاشة أو فتحت برنامج تاني.', 'ok');
+    } else {
+        pushToast('التتبع الخلفي متوقف - موقعك مش هيتحدث عند العميل إلا لما تفتح البرنامج قدامك. راجع: تفعيل "بدء تلقائي" (Autostart) وإلغاء تحسين البطارية للتطبيق من إعدادات الهاتف، وتأكد إن صلاحية الموقع "طوال الوقت".', 'err');
+    }
+}
+
 async function startGlobalPositionWatch() {
     if (riderGlobalWatchId !== null || riderBgGeoWatcherId !== null) return;
     var bg = isRunningInsideNativeApp() && window.Capacitor.Plugins && window.Capacitor.Plugins.BackgroundGeolocation;
@@ -3897,18 +3929,22 @@ async function startGlobalPositionWatch() {
                     // 🆕 لو المندوب رفض إذن الموقع في الخلفية أو حصل أي خطأ، نرجع
                     // نستخدم GPS العادي كحل احتياطي (هيشتغل طول ما البرنامج فاتح
                     // قدامه بس) بدل ما التتبع يبطل خالص
+                    setBgTrackMode('fallback');
                     startGlobalPositionWatchFallback_();
                     return;
                 }
                 if (!location) return;
+                setBgTrackMode('native');
                 var accNow = (typeof location.accuracy === 'number') ? location.accuracy : null;
                 processGlobalPositionFix_(location.latitude, location.longitude, accNow);
             }).then(function (id) { riderBgGeoWatcherId = id; }).catch(function () {
+                setBgTrackMode('fallback');
                 startGlobalPositionWatchFallback_();
             });
             return;
         } catch (e) { /* لو حصل أي خطأ غير متوقع، نرجع للطريقة الاحتياطية */ }
     }
+    setBgTrackMode('fallback');
     startGlobalPositionWatchFallback_();
 }
 

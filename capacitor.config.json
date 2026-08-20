@@ -4,6 +4,9 @@
   "webDir": "www",
   "bundledWebRuntime": false,
   "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    },
     "SplashScreen": {
       "launchShowDuration": 300,
       "launchAutoHide": true,

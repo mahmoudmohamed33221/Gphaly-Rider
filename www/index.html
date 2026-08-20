@@ -31,7 +31,7 @@
             --info-bg: rgba(56,189,248,0.08);
             --info-border: rgba(56,189,248,0.2);
             --nav-h: 72px;
-            --hdr-h: 58px;
+            --hdr-h: 78px;
             --logo-url: url('https://d.top4top.io/p_3850qm1ld0.png');
         }
         *{margin:0;padding:0;box-sizing:border-box;}
@@ -93,10 +93,12 @@
         .auth-btns { display: flex; flex-direction: column; gap: 10px; margin-top: 24px; }
 
         /* ==================== تعديل الهيدر والكونتينر العام ==================== */
-        .app-hdr{position:fixed;top:0;left:0;right:0;height:var(--hdr-h);background:rgba(17,24,39,.92);backdrop-filter:blur(14px);border-bottom:1px solid var(--border-subtle);display:flex;align-items:center;justify-content:space-between;padding:0 16px;z-index:100;flex-direction:row-reverse;}
-        .hdr-title{font-size:18px;font-weight:900;color:var(--accent);display:flex;align-items:center;gap:6px;justify-content:flex-start;}
-        .hdr-title i{font-size:18px;}
-        .hdr-sync{display:flex;align-items:center;gap:8px;position:absolute;left:50%;transform:translateX(-50%);}
+        .app-hdr{position:fixed;top:0;left:0;right:0;height:var(--hdr-h);background:rgba(17,24,39,.92);backdrop-filter:blur(14px);border-bottom:1px solid var(--border-subtle);display:flex;flex-direction:column;justify-content:center;gap:6px;padding:8px 16px;z-index:100;}
+        .hdr-row-top{display:flex;align-items:center;justify-content:space-between;flex-direction:row-reverse;}
+        .hdr-row-bottom{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;}
+        .hdr-title{font-size:17px;font-weight:900;color:var(--accent);display:flex;align-items:center;gap:6px;justify-content:flex-start;}
+        .hdr-title i{font-size:17px;}
+        .hdr-sync{display:flex;align-items:center;gap:8px;}
         .sync-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:blink 2s infinite;}
         .sync-dot.off{background:var(--danger);animation:none;}
         .sync-txt{font-size:11px;color:var(--dim);font-weight:700;}
@@ -722,16 +724,18 @@
 <div class="bg-orb bg-orb-2"></div>
 
 <header class="app-hdr">
-    <div class="hdr-menu"><button class="menu-btn" onclick="openDrawer()"><i class="fa-solid fa-bars"></i></button></div>
-    <div class="hdr-sync">
-        <div style="display:flex;align-items:center;gap:5px;">
-            <div class="sync-dot" id="syncDot"></div>
-            <span class="sync-txt" id="syncTxt">جارٍ التحميل...</span>
-            <span class="bg-track-badge" id="bgTrackBadge" onclick="explainBgTrackBadge()"></span>
-        </div>
+    <div class="hdr-row-top">
+        <div class="hdr-menu"><button class="menu-btn" onclick="openDrawer()"><i class="fa-solid fa-bars"></i></button></div>
+        <div class="hdr-title"><i class="fa-solid fa-motorcycle"></i> جبهالي ريدر</div>
         <button class="ref-btn" id="refBtn" onclick="manualRefresh()"><i class="fa-solid fa-arrows-rotate"></i></button>
     </div>
-    <div class="hdr-title"><i class="fa-solid fa-motorcycle"></i> جبهالي ريدر</div>
+    <div class="hdr-row-bottom">
+        <div class="hdr-sync">
+            <div class="sync-dot" id="syncDot"></div>
+            <span class="sync-txt" id="syncTxt">جارٍ التحميل...</span>
+        </div>
+        <span class="bg-track-badge" id="bgTrackBadge" onclick="explainBgTrackBadge()"></span>
+    </div>
 </header>
 
 <div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>

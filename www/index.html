@@ -31,7 +31,7 @@
             --info-bg: rgba(56,189,248,0.08);
             --info-border: rgba(56,189,248,0.2);
             --nav-h: 72px;
-            --hdr-h: 116px;
+            --hdr-h: 96px;
             --logo-url: url('https://d.top4top.io/p_3850qm1ld0.png');
         }
         *{margin:0;padding:0;box-sizing:border-box;}
@@ -93,24 +93,23 @@
         .auth-btns { display: flex; flex-direction: column; gap: 10px; margin-top: 24px; }
 
         /* ==================== تعديل الهيدر والكونتينر العام ==================== */
-        .app-hdr{position:fixed;top:0;left:0;right:0;height:var(--hdr-h);background:rgba(17,24,39,.92);backdrop-filter:blur(14px);border-bottom:1px solid var(--border-subtle);display:flex;flex-direction:column;justify-content:center;gap:6px;padding:8px 16px;z-index:100;}
-        .hdr-row-top{display:flex;align-items:center;justify-content:space-between;flex-direction:row-reverse;}
-        .hdr-row-bottom{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;}
-        .hdr-title{font-size:17px;font-weight:900;color:var(--accent);display:flex;align-items:center;gap:6px;justify-content:flex-start;}
-        .hdr-title i{font-size:17px;}
-        .hdr-sync{display:flex;align-items:center;gap:8px;}
-        .sync-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:blink 2s infinite;}
+        .app-hdr{position:fixed;top:0;left:0;right:0;height:var(--hdr-h);background:rgba(17,24,39,.92);backdrop-filter:blur(14px);border-bottom:1px solid var(--border-subtle);display:flex;flex-direction:column;justify-content:center;gap:8px;padding:8px 16px;z-index:100;}
+        .hdr-row-top{display:flex;align-items:center;justify-content:space-between;flex-direction:row-reverse;gap:10px;}
+        .hdr-line-one{display:flex;align-items:center;gap:10px;flex:1;min-width:0;overflow:hidden;}
+        .hdr-title-txt{font-size:16px;font-weight:900;color:var(--accent);white-space:nowrap;}
+        .hdr-sync{display:flex;align-items:center;gap:6px;white-space:nowrap;}
+        .sync-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:blink 2s infinite;flex-shrink:0;}
         .sync-dot.off{background:var(--danger);animation:none;}
         .sync-txt{font-size:11px;color:var(--dim);font-weight:700;}
         @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
         /* 🆕 شارة توضح هل التتبع الخلفي الحقيقي شغال ولا التطبيق راجع للوضع الاحتياطي */
-        .bg-track-badge{font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px;display:none;align-items:center;gap:4px;cursor:pointer;white-space:nowrap;}
+        .bg-track-badge{font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px;display:none;align-items:center;gap:4px;cursor:pointer;white-space:nowrap;flex-shrink:0;}
         .bg-track-badge.show{display:inline-flex;}
         .bg-track-badge.native{background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.35);}
         .bg-track-badge.fallback{background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.35);}
         /* 🆕 صف زرار "يعمل / لا يعمل" في الهيدر */
         .hdr-row-work{display:flex;align-items:center;justify-content:center;}
-        .work-toggle-btn{border:none;border-radius:10px;padding:6px 22px;font-size:13px;font-weight:900;display:flex;align-items:center;gap:7px;cursor:pointer;transition:.2s;width:100%;justify-content:center;}
+        .work-toggle-btn{border:none;border-radius:12px;padding:11px 22px;font-size:15px;font-weight:900;display:flex;align-items:center;gap:8px;cursor:pointer;transition:.2s;width:100%;justify-content:center;}
         .work-toggle-btn.off{background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.4);}
         .work-toggle-btn.on{background:rgba(34,197,94,.18);color:#22c55e;border:1px solid rgba(34,197,94,.5);}
         .work-toggle-btn:active{transform:scale(.97);}
@@ -732,15 +731,14 @@
 <header class="app-hdr">
     <div class="hdr-row-top">
         <div class="hdr-menu"><button class="menu-btn" onclick="openDrawer()"><i class="fa-solid fa-bars"></i></button></div>
-        <div class="hdr-title"><i class="fa-solid fa-motorcycle"></i> جبهالي ريدر</div>
-        <button class="ref-btn" id="refBtn" onclick="manualRefresh()"><i class="fa-solid fa-arrows-rotate"></i></button>
-    </div>
-    <div class="hdr-row-bottom">
-        <div class="hdr-sync">
-            <div class="sync-dot" id="syncDot"></div>
-            <span class="sync-txt" id="syncTxt">جارٍ التحميل...</span>
+        <div class="hdr-line-one">
+            <span class="hdr-title-txt">جبهالي ريدر</span>
+            <div class="hdr-sync">
+                <div class="sync-dot" id="syncDot"></div>
+                <span class="sync-txt" id="syncTxt">جارٍ التحميل...</span>
+            </div>
+            <span class="bg-track-badge" id="bgTrackBadge" onclick="explainBgTrackBadge()"></span>
         </div>
-        <span class="bg-track-badge" id="bgTrackBadge" onclick="explainBgTrackBadge()"></span>
     </div>
     <div class="hdr-row-work">
         <button class="work-toggle-btn off" id="workToggleBtn" onclick="onWorkToggleTap()">
@@ -792,6 +790,11 @@
     <div class="center-modal-box" id="inboxAlertBox"></div>
 </div>
 
+<!-- 🆕 مودال منتصف الشاشة عام: تأكيد إنهاء الشيفت + تحديد تكاليف التوصيل -->
+<div class="center-modal-bg" id="centerModalBg" onclick="if(event.target.id==='centerModalBg'){closeCenterModal();}">
+    <div class="center-modal-box" id="centerModalBox"></div>
+</div>
+
 <!-- 🌟 شاشة التحديث الإجباري - بتظهر فوق كل حاجة ومفيهاش زرار إغلاق -->
 <div class="auth-screen sys-overlay" id="forceUpdateScreen" style="display:none;z-index:6000;">
     <div class="sys-card sys-pulse-warn" onclick="event.stopPropagation()">
@@ -817,7 +820,7 @@
 </div>
 
 <script>
-var GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyoI-btjvBIfKEMkTRSALKgVyl0amE5dpKTqX8ACYzxqxq4cjRB8Gmpt4KqucAHsEh0qA/exec";
+var GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwMXuxqxWudW-JiXDhY_5plWZ2GTosa5BSBNFRPpnZyHDNOi1l1A_8qGnKmyiquVq9LNw/exec";
 var APP_VERSION = "3.0.1"; // لازم يطابق قيمة الخلية D2 في الشيت، وإلا هيظهر تحديث إجباري
 
 // ⚡ عزل بيانات كل طيار عن التاني على نفس الجهاز: كل بيانات الطيار (أرباح/سجل/طلبات...) بتتخزن
@@ -1494,7 +1497,7 @@ function addToEarningsHistory(order, status, ts) {
     var record = {
         bon: order.bon, name: order.name, phone: order.phone, orderTime: order.orderTime, orderDayDate: order.orderDayDate,
         ezba: order.ezba, street: order.street, landmark: order.landmark, orderDetails: order.orderDetails, notes: order.notes,
-        orderCost: Number(order.orderCost) || 0, deliveryCost: Number(order.deliveryCost) || 0,
+        orderCost: Number(order.orderCost) || 0, deliveryCost: Number(order.deliveryCost) || 0, adminFee: Number(order.adminFee) || 0,
         acceptedAt: order.acceptedAt || null, deliveredAt: order.deliveredAt || null, cancelledAt: order.cancelledAt || null,
         status: status
     };
@@ -1803,7 +1806,7 @@ function renderDeliveredTab(animate) {
 }
 
 function buildDeliveredCard(o) {
-    var orderTS = parseOrderTime(o.orderTime); var acceptTS = o.acceptedAt || 0; var dclTS = o.deliveredAt || 0; var oc = Number(o.orderCost) || 0; var dc = Number(o.deliveryCost) || 0; var total = oc + dc;
+    var orderTS = parseOrderTime(o.orderTime); var acceptTS = o.acceptedAt || 0; var dclTS = o.deliveredAt || 0; var oc = Number(o.orderCost) || 0; var dc = Number(o.deliveryCost) || 0; var af = Number(o.adminFee) || 0; var total = oc + dc + af;
     var beforeAcceptDelay = (acceptTS && orderTS) ? formatDelay(acceptTS - orderTS) : { text: '---', color: 'var(--dim)' };
     var afterAcceptDelay = (acceptTS && dclTS) ? formatDelay(dclTS - acceptTS) : { text: '---', color: 'var(--dim)' };
     var syncBadge = (o.synced === false) ? ' <i class="fa-solid fa-triangle-exclamation" style="color:#FBBF24;font-size:12px;" title="لسه ماتبعتش للسيرفر - هيتبعت أوتوماتيك لما النت يرجع"></i>' : '';
@@ -1814,7 +1817,7 @@ function buildDeliveredCard(o) {
     html += buildLocationButtonsHtml(o).replace('margin:0 16px 10px;', 'margin:0 0 10px;');
     if (o.orderDetails) { html += '<div style="margin-bottom:10px;"><span style="font-size:11px;color:var(--accent);font-weight:700;display:block;margin-bottom:4px;"><i class="fa-solid fa-list" style="margin-left:4px;"></i> محتويات الأوردر:</span><div class="oc-contents-box">' + escHtml(o.orderDetails) + '</div></div>'; }
     if (o.notes && o.notes !== 'لا توجد ملاحظات') { html += '<div class="oc-notes" style="margin-bottom:10px;"><i class="fa-solid fa-comment-dots"></i><span><b>ملحوظة:</b> ' + escHtml(o.notes) + '</span></div>'; }
-    html += '<div class="oc-cost-box" style="margin:0 0 10px 0;"><div class="oc-cost-row"><span class="lbl"><i class="fa-solid fa-shopping-bag" style="color:var(--accent);"></i>ثمن الأوردر:</span><span class="val gold">' + oc + ' ج.م</span></div><div class="oc-cost-row"><span class="lbl"><i class="fa-solid fa-motorcycle" style="color:var(--info);"></i>التوصيل:</span><span class="val blue">' + dc + ' ج.م</span></div><div class="oc-cost-divider"></div><div class="oc-cost-row"><span class="lbl" style="font-size:14px;font-weight:900;"><i class="fa-solid fa-wallet" style="color:var(--accent);"></i>الإجمالي:</span><span class="val green">' + total + ' ج.م</span></div></div>';
+    html += '<div class="oc-cost-box" style="margin:0 0 10px 0;"><div class="oc-cost-row"><span class="lbl"><i class="fa-solid fa-shopping-bag" style="color:var(--accent);"></i>ثمن الطلب:</span><span class="val gold">' + oc + ' ج.م</span></div><div class="oc-cost-row"><span class="lbl"><i class="fa-solid fa-motorcycle" style="color:var(--info);"></i>ثمن التوصيل:</span><span class="val blue">' + dc + ' ج.م</span></div><div class="oc-cost-row"><span class="lbl"><i class="fa-solid fa-coins" style="color:var(--muted);"></i>مصاريف إدارية:</span><span class="val">' + af + ' ج.م</span></div><div class="oc-cost-divider"></div><div class="oc-cost-row"><span class="lbl" style="font-size:14px;font-weight:900;"><i class="fa-solid fa-wallet" style="color:var(--accent);"></i>الإجمالي:</span><span class="val green">' + total + ' ج.م</span></div></div>';
     html += '<div class="oc-delay-grid" style="margin:0 0 10px 0;"><div class="oc-delay-item"><span class="oc-delay-lbl amber">قبل القبول</span><span class="oc-delay-val amber" style="color:' + beforeAcceptDelay.color + ';">' + beforeAcceptDelay.text + '</span></div><div class="oc-delay-item"><span class="oc-delay-lbl blue">بعد القبول</span><span class="oc-delay-val blue" style="color:' + afterAcceptDelay.color + ';">' + afterAcceptDelay.text + '</span></div></div>';
     html += '<div id="dtslot-' + o.bon + '" style="margin-top:8px;"></div></div></div></div>';
     return html;
@@ -2368,8 +2371,8 @@ function buildOrderCard(o) {
         html += '<div class="oc-delay-grid"><div class="oc-delay-item"><span class="oc-delay-lbl amber">قبل القبول</span><span class="oc-delay-val amber" style="color:' + beforeAcceptDelay.color + ';">' + beforeAcceptDelay.text + '</span></div><div class="oc-delay-item"><span class="oc-delay-lbl blue">بعد القبول</span><span class="oc-delay-val blue" data-accept-delay-ts="' + acceptTS + '" style="color:' + acceptDelayResult.color + ';">' + acceptDelayResult.text + '</span></div></div>';
         var actions = '';
         if (phase === 'delivering') {
-            var oc = Number(o.orderCost) || 0; var dc = Number(o.deliveryCost) || 0; var total = oc + dc;
-            html += '<div class="oc-cost-box"><div class="oc-cost-row"><span class="lbl"><i class="fa-solid fa-shopping-bag" style="color:var(--accent);"></i>ثمن الأوردر:</span><span class="val gold">' + oc + ' ج.م</span></div><div class="oc-cost-row"><span class="lbl"><i class="fa-solid fa-motorcycle" style="color:var(--info);"></i>التوصيل:</span><span class="val blue">' + dc + ' ج.م</span></div><div class="oc-cost-divider"></div><div class="oc-cost-row"><span class="lbl" style="font-size:14px;font-weight:900;"><i class="fa-solid fa-wallet" style="color:var(--accent);"></i>الإجمالي:</span><span class="val green">' + total + ' ج.م</span></div></div>';
+            var oc = Number(o.orderCost) || 0; var dc = Number(o.deliveryCost) || 0; var af = Number(o.adminFee) || 0; var total = oc + dc + af;
+            html += '<div class="oc-cost-box"><div class="oc-cost-row"><span class="lbl"><i class="fa-solid fa-shopping-bag" style="color:var(--accent);"></i>ثمن الطلب:</span><span class="val gold">' + oc + ' ج.م</span></div><div class="oc-cost-row"><span class="lbl"><i class="fa-solid fa-motorcycle" style="color:var(--info);"></i>ثمن التوصيل:</span><span class="val blue">' + dc + ' ج.م</span></div><div class="oc-cost-row"><span class="lbl"><i class="fa-solid fa-coins" style="color:var(--muted);"></i>مصاريف إدارية:</span><span class="val">' + af + ' ج.م</span></div><div class="oc-cost-divider"></div><div class="oc-cost-row"><span class="lbl" style="font-size:14px;font-weight:900;"><i class="fa-solid fa-wallet" style="color:var(--accent);"></i>الإجمالي:</span><span class="val green">' + total + ' ج.م</span></div></div>';
             actions = '<button class="act-btn green" onclick="confirmComplete(' + o.bon + ')"><i class="fa-solid fa-hand-holding-dollar"></i> اضغط إذا تم التوصيل وتحصيل الكاش</button>';
         } else if (phase === 'preparing') {
             actions = '<button class="act-btn purple" onclick="openDeliverModal(' + o.bon + ')"><i class="fa-solid fa-motorcycle"></i> اضغط لو جهزت الطلب</button><div class="oc-cancel-row"><button class="oc-cancel-btn" onclick="confirmCancel(' + o.bon + ')"><i class="fa-solid fa-trash-alt"></i> إلغاء وحذف الطلب</button></div>';
@@ -3978,8 +3981,7 @@ function syncWorkStatusToServer_(working) {
 
 function onWorkToggleTap() {
     if (!riderWorkingNow) {
-        document.getElementById('modalBox').innerHTML = '<div class="modal-bar"></div><div class="cfm-icon ok"><i class="fa-solid fa-power-off"></i></div><div class="modal-ttl">هل تريد بدء العمل الان؟</div><div class="modal-btns"><button class="act-btn sec" style="flex:1;" onclick="closeModal()">ليس الان</button><button class="act-btn pri" style="flex:1;" onclick="closeModal();confirmStartWork()">نعم</button></div>';
-        document.getElementById('modalBg').classList.add('show');
+        openCenterModal('<div class="cfm-icon ok"><i class="fa-solid fa-power-off"></i></div><div class="modal-ttl">هل تريد بدء العمل الان؟</div><div class="modal-btns"><button class="act-btn sec" style="flex:1;" onclick="closeCenterModal()">ليس الان</button><button class="act-btn pri" style="flex:1;" onclick="closeCenterModal();confirmStartWork()">نعم</button></div>');
         return;
     }
     // كان شغال ودَس تاني عشان يوقف - يتمنع لو معاه طلب شغال دلوقتي
@@ -3987,6 +3989,10 @@ function onWorkToggleTap() {
         pushToast('معاك طلب شغال دلوقتي، متقدرش توقف الشغل إلا لما تخلصه.', 'err');
         return;
     }
+    openCenterModal('<div class="cfm-icon dan"><i class="fa-solid fa-power-off"></i></div><div class="modal-ttl">هل أنت متأكد من إنهاء العمل الان؟</div><div class="modal-btns"><button class="act-btn sec" style="flex:1;" onclick="closeCenterModal()">أكمل شيفت</button><button class="act-btn dan" style="flex:1;" onclick="closeCenterModal();confirmStopWork()">اقفل الشيفت</button></div>');
+}
+
+function confirmStopWork() {
     riderWorkingNow = false;
     renderWorkToggleBtn();
     syncWorkStatusToServer_(false);
@@ -4075,6 +4081,31 @@ var riderOrderDistCache = {}; // { bon: { distRiderShop, distShopCust, distRider
 function getOrderDistCache(bon) {
     if (!riderOrderDistCache[bon]) { riderOrderDistCache[bon] = { distRiderShop: null, distShopCust: null, distRiderCust: null, hasReal: false, hasRealCust: false, lastBgCalc: 0, lastBgCalcCust: 0 }; }
     return riderOrderDistCache[bon];
+}
+
+// 🆕 بيرجع المسافة (كم) بين المحل والعميل كرقم (مش نص) - نفس الرقم اللي بيبان
+// في "الطلبات الجديدة" قبل ما الطيار يقبل الطلب أصلاً، وده اللي بيتبنى عليه
+// حساب تكلفة التوصيل أوتوماتيك (1.5 قرش/متر = 15 ج.م/كم)
+function getOrderShopCustKm_(o) {
+    computeOrderDistances(o); // يتأكد إن الكاش اتحسب لو لسه ما اتحسبش
+    var cache = getOrderDistCache(o.bon);
+    if (!cache.distShopCust) return 0;
+    var n = parseFloat(cache.distShopCust);
+    return isNaN(n) ? 0 : n;
+}
+
+// 🆕 حساب تكلفة التوصيل + المصاريف الإدارية أوتوماتيك:
+// - تكلفة التوصيل = مسافة (المحل → العميل) بالكم × 15 ج.م (يعني 1.5 قرش للمتر بالظبط)
+// - المصاريف الإدارية = الفرق لحد أقرب مضاعف لـ5 جنيه أكبر من (ثمن الطلب + التوصيل) - يعني
+//   الإجمالي النهائي دايمًا رقم مقفول قابل للقسمة على 5 (30 → 35، مش 30 يفضل زي ما هو)
+function calcDeliveryPricing_(orderCostRaw, o) {
+    var orderCost = Math.round((Number(orderCostRaw) || 0) * 100) / 100;
+    var km = getOrderShopCustKm_(o);
+    var deliveryCost = Math.round(km * 15 * 100) / 100;
+    var subtotal = Math.round((orderCost + deliveryCost) * 100) / 100;
+    var target = (Math.floor(subtotal / 5) + 1) * 5;
+    var adminFee = Math.round((target - subtotal) * 100) / 100;
+    return { orderCost: orderCost, deliveryCost: deliveryCost, adminFee: adminFee, total: target, km: km };
 }
 
 // 🆕 بيحسب مسافات الطلب (تقريبي فوري + يبدأ يجيب الرقم الحقيقي في الخلفية)
@@ -4331,6 +4362,13 @@ function closeInboxAlertModal() {
     document.getElementById('inboxAlertBg').classList.remove('show');
 }
 function openInboxFromNotification(id) { stopAllNotificationSounds(); closeDrawer(); currentDrawerPage = 'inbox'; openInboxMessage(id); }
+
+// 🆕 مودال منتصف الشاشة عام (تأكيد إنهاء شيفت + تحديد تكاليف التوصيل)
+function openCenterModal(html) {
+    document.getElementById('centerModalBox').innerHTML = html;
+    document.getElementById('centerModalBg').classList.add('show');
+}
+function closeCenterModal() { document.getElementById('centerModalBg').classList.remove('show'); }
 
 function openInbox() {
     closeDrawer(); // القائمة الجانبية كانت بتفضل فاتحة من ورا البريد - دلوقتي بتتقفل زي باقي الصفحات
@@ -5079,17 +5117,18 @@ function prepareOrderLocally(bon) {
         .catch(function() { console.error('تعذر إبلاغ السيرفر بالتحضير - هيتم إعادة المحاولة تلقائياً'); });
 }
 
-function deliverOrderLocally(bon, orderCost, deliveryCost) {
+function deliverOrderLocally(bon, orderCost, deliveryCost, adminFee) {
     var idx = findOrderIndex(bon);
     if (idx !== -1) {
         allOrders[idx].isDelivering = true;
         allOrders[idx].orderCost = Number(orderCost) || 0;
         allOrders[idx].deliveryCost = Number(deliveryCost) || 0;
+        allOrders[idx].adminFee = Number(adminFee) || 0;
     }
-    setPendingAction(bon, 'deliver', { orderCost: Number(orderCost) || 0, deliveryCost: Number(deliveryCost) || 0 });
+    setPendingAction(bon, 'deliver', { orderCost: Number(orderCost) || 0, deliveryCost: Number(deliveryCost) || 0, adminFee: Number(adminFee) || 0 });
     updateBadges();
     if (!currentDrawerPage) renderCurrentTab(false);
-    var body = JSON.stringify({ action: 'updateFromReader', bon: bon, type: 'deliver', orderCost: Number(orderCost) || 0, deliveryCost: Number(deliveryCost) || 0, pilotId: ACTIVE_PILOT_ID });
+    var body = JSON.stringify({ action: 'updateFromReader', bon: bon, type: 'deliver', orderCost: Number(orderCost) || 0, deliveryCost: Number(deliveryCost) || 0, adminFee: Number(adminFee) || 0, pilotId: ACTIVE_PILOT_ID });
     fetch(GOOGLE_SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body, redirect: 'follow' })
         .then(function(res) { return res.text(); })
         .then(function(text) {
@@ -5159,15 +5198,41 @@ function cancelOrderLocally(bon) {
 
 function openDeliverModal(bon) {
     var idxD = findOrderIndex(bon); var order = idxD !== -1 ? allOrders[idxD] : null;
-    var ocVal = ''; var dcVal = order ? order.deliveryCost : ''; var sumVal = (Number(ocVal) || 0) + (Number(dcVal) || 0);
-    var box = document.getElementById('modalBox');
-    box.innerHTML = '<div class="modal-bar"></div><div class="modal-ttl">تحديد تكاليف التوصيل</div><div class="fg"><label>مبلغ الطلب (جنيه)</label><input type="number" id="inpOrderCost" placeholder="ثمن الطلب بالكامل (بدون التوصيل)" value="' + ocVal + '" inputmode="numeric"></div><div class="fg"><label>مبلغ التوصيل (جنيه)</label><input type="number" id="inpDeliveryCost" placeholder="ثمن التوصيل" value="' + dcVal + '" inputmode="numeric"></div><div style="text-align:center;font-size:14px;color:var(--muted);margin:8px 0;">الإجمالي: <span id="totalPreview" style="color:var(--accent);font-weight:800;font-size:18px;">' + sumVal + ' ج</span></div><div class="modal-btns"><button class="act-btn sec" style="flex:1;" onclick="closeModal()">إلغاء</button><button class="act-btn pri" style="flex:2;" onclick="submitDeliver(' + bon + ')"><i class="fa-solid fa-truck-fast"></i> بدء التوصيل</button></div>';
-    document.getElementById('modalBg').classList.add('show'); var ocEl = document.getElementById('inpOrderCost'); var dcEl = document.getElementById('inpDeliveryCost'); var tpEl = document.getElementById('totalPreview');
-    function calcTotal() { tpEl.textContent = ((Number(ocEl.value) || 0) + (Number(dcEl.value) || 0)) + ' ج'; }
-    ocEl.addEventListener('input', calcTotal); dcEl.addEventListener('input', calcTotal);
+    if (!order) return;
+    var html = '<div class="modal-ttl">تحديد تكاليف التوصيل</div>'
+        + '<div class="fg"><label>ثمن الطلب (جنيه)</label><input type="number" id="inpOrderCost" placeholder="اكتب ثمن الطلب بالكامل (بدون التوصيل)" value="" inputmode="numeric"></div>'
+        + '<div class="oc-cost-box" style="margin:14px 0;">'
+        +   '<div class="oc-cost-row"><span class="lbl"><i class="fa-solid fa-shopping-bag" style="color:var(--accent);"></i>ثمن الطلب:</span><span class="val gold" id="dpv-order">0.00 ج.م</span></div>'
+        +   '<div class="oc-cost-row"><span class="lbl"><i class="fa-solid fa-motorcycle" style="color:var(--info);"></i>ثمن التوصيل:</span><span class="val blue" id="dpv-delivery">0.00 ج.م</span></div>'
+        +   '<div class="oc-cost-divider"></div>'
+        +   '<div class="oc-cost-row"><span class="lbl"><i class="fa-solid fa-coins" style="color:var(--muted);"></i>مصاريف إدارية:</span><span class="val" id="dpv-admin">0.00 ج.م</span></div>'
+        +   '<div class="oc-cost-divider"></div>'
+        +   '<div class="oc-cost-row"><span class="lbl" style="font-size:14px;font-weight:900;"><i class="fa-solid fa-wallet" style="color:var(--accent);"></i>الإجمالي:</span><span class="val green" id="dpv-total">0.00 ج.م</span></div>'
+        + '</div>'
+        + '<div class="modal-btns"><button class="act-btn sec" style="flex:1;" onclick="closeCenterModal()">إلغاء</button><button class="act-btn pri" style="flex:2;" onclick="submitDeliver(' + bon + ')"><i class="fa-solid fa-truck-fast"></i> بدء التوصيل</button></div>';
+    openCenterModal(html);
+    var ocEl = document.getElementById('inpOrderCost');
+    function refreshPreview() {
+        var p = calcDeliveryPricing_(ocEl.value, order);
+        document.getElementById('dpv-order').textContent = p.orderCost.toFixed(2) + ' ج.م';
+        document.getElementById('dpv-delivery').textContent = p.deliveryCost.toFixed(2) + ' ج.م';
+        document.getElementById('dpv-admin').textContent = p.adminFee.toFixed(2) + ' ج.م';
+        document.getElementById('dpv-total').textContent = p.total.toFixed(2) + ' ج.م';
+    }
+    ocEl.addEventListener('input', refreshPreview);
+    refreshPreview();
+    setTimeout(function() { ocEl.focus(); }, 200);
 }
 
-function submitDeliver(bon) { var oc = document.getElementById('inpOrderCost').value; var dc = document.getElementById('inpDeliveryCost').value; if (!oc || Number(oc) < 0 || dc === '' || Number(dc) < 0) { return; } closeModal(); deliverOrderLocally(bon, oc, dc); }
+function submitDeliver(bon) {
+    var idxD = findOrderIndex(bon); var order = idxD !== -1 ? allOrders[idxD] : null;
+    var ocEl = document.getElementById('inpOrderCost');
+    var oc = ocEl ? ocEl.value : '';
+    if (!order || !oc || Number(oc) < 0) { return; }
+    var p = calcDeliveryPricing_(oc, order);
+    closeCenterModal();
+    deliverOrderLocally(bon, p.orderCost, p.deliveryCost, p.adminFee);
+}
 
 function confirmCancel(bon) {
     var idxC = findOrderIndex(bon); var order = idxC !== -1 ? allOrders[idxC] : null;

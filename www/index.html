@@ -31,7 +31,7 @@
             --info-bg: rgba(56,189,248,0.08);
             --info-border: rgba(56,189,248,0.2);
             --nav-h: 72px;
-            --hdr-h: 78px;
+            --hdr-h: 116px;
             --logo-url: url('https://d.top4top.io/p_3850qm1ld0.png');
         }
         *{margin:0;padding:0;box-sizing:border-box;}
@@ -108,6 +108,12 @@
         .bg-track-badge.show{display:inline-flex;}
         .bg-track-badge.native{background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.35);}
         .bg-track-badge.fallback{background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.35);}
+        /* 🆕 صف زرار "يعمل / لا يعمل" في الهيدر */
+        .hdr-row-work{display:flex;align-items:center;justify-content:center;}
+        .work-toggle-btn{border:none;border-radius:10px;padding:6px 22px;font-size:13px;font-weight:900;display:flex;align-items:center;gap:7px;cursor:pointer;transition:.2s;width:100%;justify-content:center;}
+        .work-toggle-btn.off{background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.4);}
+        .work-toggle-btn.on{background:rgba(34,197,94,.18);color:#22c55e;border:1px solid rgba(34,197,94,.5);}
+        .work-toggle-btn:active{transform:scale(.97);}
         .hdr-menu{display:flex;align-items:center;}
         .menu-btn{background:none;border:none;color:var(--dim);font-size:20px;cursor:pointer;padding:6px;border-radius:8px;transition:.2s;line-height:1;}
         .menu-btn:active{color:var(--accent);background:rgba(0,230,118,.1);}
@@ -736,7 +742,13 @@
         </div>
         <span class="bg-track-badge" id="bgTrackBadge" onclick="explainBgTrackBadge()"></span>
     </div>
+    <div class="hdr-row-work">
+        <button class="work-toggle-btn off" id="workToggleBtn" onclick="onWorkToggleTap()">
+            <i class="fa-solid fa-power-off"></i> <span id="workToggleTxt">لا يعمل</span>
+        </button>
+    </div>
 </header>
+
 
 <div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
 <div class="drawer-panel" id="drawerPanel">
@@ -805,7 +817,7 @@
 </div>
 
 <script>
-var GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzmu80J-LVxauupp2UMQk1ydvrQn89NO2gwi5EX3Peo0hkELfsXU4bw-JFv1HKdurAl_A/exec";
+var GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyoI-btjvBIfKEMkTRSALKgVyl0amE5dpKTqX8ACYzxqxq4cjRB8Gmpt4KqucAHsEh0qA/exec";
 var APP_VERSION = "3.0.1"; // لازم يطابق قيمة الخلية D2 في الشيت، وإلا هيظهر تحديث إجباري
 
 // ⚡ عزل بيانات كل طيار عن التاني على نفس الجهاز: كل بيانات الطيار (أرباح/سجل/طلبات...) بتتخزن
@@ -1351,6 +1363,8 @@ function submitLogin() {
             ACTIVE_PILOT_ID = computeActivePilotId();
             try { acceptedAtTimes = JSON.parse(localStorage.getItem(pk('gebhaly_accepted_times'))) || {}; } catch(e) { acceptedAtTimes = {}; }
             allOrders = []; knownBons = new Set(); currentTab = 'new'; openDetails = new Set();
+            riderWorkingNow = false; // 🆕 كل تسجيل دخول جديد يبدأ بحالة "لا يعمل"
+            syncWorkStatusToServer_(false);
             historySelectedDays = new Set(); historySelectMode = false;
             document.getElementById('loginScreen').style.display = 'none';
             pushToast('أهلاً بك يا بطل! تم تسجيل الدخول بنجاح', 'ok');
@@ -1755,13 +1769,21 @@ function renderCurrentTab(animate) {
     if (currentTab === 'map') { renderMapTab(animate); return; }
     if (currentTab === 'delivered') { renderDeliveredTab(animate); return; }
     var filtered = [];
-    for (var i = 0; i < allOrders.length; i++) { if (getOrderPhase(allOrders[i]) === currentTab) filtered.push(allOrders[i]); }
+    // 🆕 لو الطيار "لا يعمل"، الطلبات الجديدة تفضل مخفية تمامًا حتى لو فعليًا
+    // موجودة في السيرفر - لحد ما يدوس زرار "يعمل" ويأكد بدء العمل
+    var isWorkGated = (currentTab === 'new' && !riderWorkingNow);
+    if (!isWorkGated) {
+        for (var i = 0; i < allOrders.length; i++) { if (getOrderPhase(allOrders[i]) === currentTab) filtered.push(allOrders[i]); }
+    }
     filtered.sort(function(a, b) { return parseOrderTime(a.orderTime) - parseOrderTime(b.orderTime); }); // الأقدم (الأكتر تأخير) يظهر فوق
     var titles = { new: 'طلبات جديدة', accepted: 'طلبات مقبولة', preparing: 'قيد التحضير', delivering: 'قيد التوصيل' };
     var icons = { new: 'fa-bell', accepted: 'fa-check-double', preparing: 'fa-fire-burner', delivering: 'fa-route' };
     var animClass = animate ? ' tab-anim' : '';
     var html = '<div class="tab-pane on' + animClass + '"><div class="tab-head"><h2><i class="fa-solid ' + icons[currentTab] + '" style="margin-left:6px;color:var(--accent);"></i>' + titles[currentTab] + '</h2><div class="tab-badge">' + filtered.length + '</div></div>';
-    if (isRefreshing && allOrders.length === 0) { html += '<div class="loader"><div class="spinner"></div></div>'; }
+    if (isWorkGated) {
+        html += '<div class="empty"><i class="fa-solid fa-power-off" style="color:var(--danger);"></i><h3>إنت مش شغال دلوقتي</h3><p>دوس زرار "لا يعمل" فوق وأكّد بدء العمل عشان تشوف الطلبات الجديدة</p></div>';
+    }
+    else if (isRefreshing && allOrders.length === 0) { html += '<div class="loader"><div class="spinner"></div></div>'; }
     else if (filtered.length === 0) {
         var emptyIcons = { new: 'fa-inbox', accepted: 'fa-clipboard-check', preparing: 'fa-blender', delivering: 'fa-motorcycle' };
         var emptyMsgs = { new: 'لا توجد طلبات جديدة حالياً', accepted: 'لا توجد طلبات مقبولة', preparing: 'لا توجد طلبات قيد التحضير', delivering: 'لا توجد طلبات قيد التوصيل' };
@@ -3917,6 +3939,68 @@ function explainBgTrackBadge() {
     }
 }
 
+// =========================================================================
+// 🆕 حالة "يعمل / لا يعمل" بتاعة الطيار - افتراضيًا كل ما يفتح التطبيق (أي
+// جلسة جديدة) الحالة بتبقى "لا يعمل" ولو كان في آخر مرة "يعمل"، والطلبات
+// الجديدة بتفضل مخفية تمامًا لحد ما الطيار يدوس الزرار ويأكد إنه عايز يبدأ.
+// =========================================================================
+var riderWorkingNow = false; // 🆕 دايمًا بتبدأ false مع كل فتح للتطبيق - مش متخزنة محليًا عن قصد
+
+function getPilotPhoneForWork_() {
+    try { var p = JSON.parse(localStorage.getItem('gebhaly_pilot_full_data')); if (p && p.phone) return p.phone; } catch (e) {}
+    return '';
+}
+
+// بيرجع true لو الطيار معاه أي طلب مقبول ولسه ما اتسلمش (يعني مش فاضي)
+function riderHasActiveOrderNow() {
+    for (var i = 0; i < allOrders.length; i++) {
+        var ph = getOrderPhase(allOrders[i]);
+        if (ph === 'accepted' || ph === 'preparing' || ph === 'delivering') return true;
+    }
+    return false;
+}
+
+function renderWorkToggleBtn() {
+    var btn = document.getElementById('workToggleBtn');
+    var txt = document.getElementById('workToggleTxt');
+    if (!btn || !txt) return;
+    if (riderWorkingNow) { btn.className = 'work-toggle-btn on'; txt.textContent = 'يعمل'; }
+    else { btn.className = 'work-toggle-btn off'; txt.textContent = 'لا يعمل'; }
+}
+
+// بيبعت الحالة الجديدة للسيرفر (شيت "الطيارين" - عمود "يعمل الان") في الخلفية
+function syncWorkStatusToServer_(working) {
+    var phone = getPilotPhoneForWork_();
+    if (!phone) return;
+    var body = JSON.stringify({ action: 'setRiderWorkStatus', phone: phone, working: working });
+    fetch(GOOGLE_SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body, redirect: 'follow' }).catch(function () {});
+}
+
+function onWorkToggleTap() {
+    if (!riderWorkingNow) {
+        document.getElementById('modalBox').innerHTML = '<div class="modal-bar"></div><div class="cfm-icon ok"><i class="fa-solid fa-power-off"></i></div><div class="modal-ttl">هل تريد بدء العمل الان؟</div><div class="modal-btns"><button class="act-btn sec" style="flex:1;" onclick="closeModal()">ليس الان</button><button class="act-btn pri" style="flex:1;" onclick="closeModal();confirmStartWork()">نعم</button></div>';
+        document.getElementById('modalBg').classList.add('show');
+        return;
+    }
+    // كان شغال ودَس تاني عشان يوقف - يتمنع لو معاه طلب شغال دلوقتي
+    if (riderHasActiveOrderNow()) {
+        pushToast('معاك طلب شغال دلوقتي، متقدرش توقف الشغل إلا لما تخلصه.', 'err');
+        return;
+    }
+    riderWorkingNow = false;
+    renderWorkToggleBtn();
+    syncWorkStatusToServer_(false);
+    renderCurrentTab(false);
+}
+
+function confirmStartWork() {
+    riderWorkingNow = true;
+    renderWorkToggleBtn();
+    syncWorkStatusToServer_(true);
+    renderCurrentTab(false);
+    try { manualRefresh(); } catch (e) {}
+}
+
 async function startGlobalPositionWatch() {
     if (riderGlobalWatchId !== null || riderBgGeoWatcherId !== null) return;
     var bg = isRunningInsideNativeApp() && window.Capacitor.Plugins && window.Capacitor.Plugins.BackgroundGeolocation;
@@ -4870,7 +4954,7 @@ function fetchOrders() {
             }
             for (var i = 0; i < allOrders.length; i++) { knownBons.add(allOrders[i].bon); }
             syncAcceptedTimes();
-            if (oldBons.size > 0) { for (var j = 0; j < allOrders.length; j++) { if (!oldBons.has(allOrders[j].bon) && getOrderPhase(allOrders[j]) === 'new') { spawnNewOrderAlert(allOrders[j].bon, allOrders[j].name); } } }
+            if (oldBons.size > 0) { for (var j = 0; j < allOrders.length; j++) { if (!oldBons.has(allOrders[j].bon) && getOrderPhase(allOrders[j]) === 'new' && riderWorkingNow) { spawnNewOrderAlert(allOrders[j].bon, allOrders[j].name); } } }
             var newFingerprint = getOrdersFingerprint(); lastSync = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); clearTimeout(loadingTimer); updateSyncUI('on'); updateBadges();
             if (oldFingerprint !== newFingerprint) { renderCurrentTab(false); restoreOpenDetails(); } else { if (!currentDrawerPage) updateAllDelays(); }
         })
@@ -5110,6 +5194,7 @@ function updateSyncUI(state) {
 function updateBadges() {
     var counts = { new: 0, accepted: 0, preparing: 0, delivering: 0 };
     for (var i = 0; i < allOrders.length; i++) { var phase = getOrderPhase(allOrders[i]); if (counts.hasOwnProperty(phase)) counts[phase]++; }
+    if (!riderWorkingNow) counts.new = 0; // 🆕 مفيش بادچ لطلبات جديدة والطيار "لا يعمل"
     var doneCount = getDoneOrders().length; 
     var keys = ['new', 'accepted', 'preparing', 'delivering', 'delivered']; 
     var vals = [counts.new, counts.accepted, counts.preparing, counts.delivering, doneCount];
@@ -5265,6 +5350,7 @@ setInterval(function () {
 
 function init() {
     buildNav();
+    renderWorkToggleBtn(); // 🆕 يبدأ دايمًا "لا يعمل" مع كل فتح/تسجيل دخول
     migrateOldDoneOrdersToHistoryOnce();
     registerPushNotifications(); // 🆕 تسجيل توكن إشعارات الطيار - بعد ما نتأكد إن رقم تليفونه معروف (بعد تسجيل الدخول)
     try { startRCPresenceHeartbeat(); } catch(e) {} // 🆕 نبضة الحضور العامة - أساس الصحين الرمادي الجديد

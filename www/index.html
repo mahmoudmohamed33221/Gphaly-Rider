@@ -31,7 +31,7 @@
             --info-bg: rgba(56,189,248,0.08);
             --info-border: rgba(56,189,248,0.2);
             --nav-h: 72px;
-            --hdr-h: 96px;
+            --hdr-h: 100px;
             --logo-url: url('https://d.top4top.io/p_3850qm1ld0.png');
         }
         *{margin:0;padding:0;box-sizing:border-box;}
@@ -96,14 +96,15 @@
         .app-hdr{position:fixed;top:0;left:0;right:0;height:var(--hdr-h);background:rgba(17,24,39,.92);backdrop-filter:blur(14px);border-bottom:1px solid var(--border-subtle);display:flex;flex-direction:column;justify-content:center;gap:8px;padding:8px 16px;z-index:100;}
         .hdr-row-top{display:flex;align-items:center;justify-content:space-between;flex-direction:row-reverse;gap:10px;}
         .hdr-line-one{display:flex;align-items:center;gap:10px;flex:1;min-width:0;overflow:hidden;}
-        .hdr-title-txt{font-size:16px;font-weight:900;color:var(--accent);white-space:nowrap;}
-        .hdr-sync{display:flex;align-items:center;gap:6px;white-space:nowrap;}
+        .hdr-title-txt{font-size:19px;font-weight:900;color:var(--accent);white-space:nowrap;order:1;flex-shrink:0;}
+        .hdr-sync{display:flex;align-items:center;gap:6px;white-space:nowrap;order:2;flex:1;min-width:0;}
         .sync-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:blink 2s infinite;flex-shrink:0;}
         .sync-dot.off{background:var(--danger);animation:none;}
-        .sync-txt{font-size:11px;color:var(--dim);font-weight:700;}
+        .sync-txt{font-size:14px;color:var(--dim);font-weight:700;}
         @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
-        /* 🆕 شارة توضح هل التتبع الخلفي الحقيقي شغال ولا التطبيق راجع للوضع الاحتياطي */
-        .bg-track-badge{font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px;display:none;align-items:center;gap:4px;cursor:pointer;white-space:nowrap;flex-shrink:0;}
+        /* 🆕 شارة توضح هل التتبع الخلفي الحقيقي شغال ولا التطبيق راجع للوضع الاحتياطي - order:3
+           بتخليها دايمًا في آخر الصف (أقصى الشمال بصريًا) عشان متزقّش نص "متصل/جارٍ التحديث" */
+        .bg-track-badge{font-size:13px;font-weight:800;padding:3px 9px;border-radius:20px;display:none;align-items:center;gap:4px;cursor:pointer;white-space:nowrap;flex-shrink:0;order:3;}
         .bg-track-badge.show{display:inline-flex;}
         .bg-track-badge.native{background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.35);}
         .bg-track-badge.fallback{background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.35);}
@@ -820,7 +821,7 @@
 </div>
 
 <script>
-var GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwMXuxqxWudW-JiXDhY_5plWZ2GTosa5BSBNFRPpnZyHDNOi1l1A_8qGnKmyiquVq9LNw/exec";
+var GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxmOyapE5Hjv7esYlosZhNdK05kDm65Y2wblqynWCIHAxspe9eR__yiddNxq25HLLBJeA/exec";
 var APP_VERSION = "3.0.1"; // لازم يطابق قيمة الخلية D2 في الشيت، وإلا هيظهر تحديث إجباري
 
 // ⚡ عزل بيانات كل طيار عن التاني على نفس الجهاز: كل بيانات الطيار (أرباح/سجل/طلبات...) بتتخزن
@@ -4101,7 +4102,7 @@ function getOrderShopCustKm_(o) {
 function calcDeliveryPricing_(orderCostRaw, o) {
     var orderCost = Math.round((Number(orderCostRaw) || 0) * 100) / 100;
     var km = getOrderShopCustKm_(o);
-    var deliveryCost = Math.round(km * 15 * 100) / 100;
+    var deliveryCost = Math.round(Math.max(km * 15, 10) * 100) / 100; // 🆕 حد أدنى 10 ج.م للتوصيل، وبعدها بيزيد حسب المسافة بنفس معدل 1.5 قرش/متر
     var subtotal = Math.round((orderCost + deliveryCost) * 100) / 100;
     var target = (Math.floor(subtotal / 5) + 1) * 5;
     var adminFee = Math.round((target - subtotal) * 100) / 100;

@@ -836,7 +836,7 @@
 </div>
 
 <script>
-var GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzvOtUpqNAT70MW3h-MhhoLhqOehAN4ZF9oA5T_4-CXZAro413fosEop8OF_m_gLqstkw/exec";
+var GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw64824hZZJVntyw2AmyZZpI2HIMl64bwBV5wpqoANIDYky_Xl0Lj28sxz8M3xAAimSuA/exec";
 var APP_VERSION = "3.0.1"; // لازم يطابق قيمة الخلية D2 في الشيت، وإلا هيظهر تحديث إجباري
 
 // ⚡ عزل بيانات كل طيار عن التاني على نفس الجهاز: كل بيانات الطيار (أرباح/سجل/طلبات...) بتتخزن
@@ -4194,7 +4194,7 @@ function parseOrderDetailsStructured(orderDetails) {
 var riderOrderDistCache = {}; // { bon: { distRiderShop, distShopCust, distRiderCust, hasReal, hasRealCust, lastBgCalc, lastBgCalcCust } }
 
 function getOrderDistCache(bon) {
-    if (!riderOrderDistCache[bon]) { riderOrderDistCache[bon] = { distRiderShop: null, distShopCust: null, distRiderCust: null, hasReal: false, hasRealCust: false, lastBgCalc: 0, lastBgCalcCust: 0 }; }
+    if (!riderOrderDistCache[bon]) { riderOrderDistCache[bon] = { distRiderShop: null, distShopCust: null, distRiderCust: null, hasReal: false, hasRealCust: false, hasRealShopCust: false, lastBgCalc: 0, lastBgCalcCust: 0 }; }
     return riderOrderDistCache[bon];
 }
 
@@ -4233,7 +4233,20 @@ function computeOrderDistances(o) {
     var shopPos = parseLatLngFromLocationString(o.storeLocation);
     var cache = getOrderDistCache(o.bon);
     var phase = getOrderPhase(o);
-    if (shopPos && custPos && cache.distShopCust === null) { cache.distShopCust = haversineKm(shopPos.lat, shopPos.lng, custPos.lat, custPos.lng).toFixed(3) + ' كم'; }
+    // 🆕 مسافة (المحل → العميل) - أساس حساب سعر التوصيل. لو السيرفر رجّع رقم
+    // مقفول (اتقفل وقت ما طيار قبل الطلب)، بنستخدمه زي ما هو ومنحاولش نحسبه
+    // تاني خالص - ده اللي بيضمن إن السعر مايتغيرش أبداً بعد القبول مهما حصل.
+    // لو لسه مفيش رقم مقفول (الطلب في "الطلبات الجديدة" ولسه محدش قبله)،
+    // بنعرض تقريب فوري بالخط المستقيم لحد ما نجيب الرقم الحقيقي من OSRM في
+    // الخلفية، وبنفضل نحاول لحد ما حد يقبل الطلب - أول ما يتقبل بنوقف نحاول
+    // ونسيب اللي وصلنا له وقتها (ده اللي هيتقفل عند السيرفر أصلاً)
+    if (o.lockedShopCustKm != null && o.lockedShopCustKm > 0) {
+        cache.distShopCust = o.lockedShopCustKm.toFixed(3) + ' كم';
+        cache.hasRealShopCust = true;
+    } else if (shopPos && custPos) {
+        if (cache.distShopCust === null) { cache.distShopCust = haversineKm(shopPos.lat, shopPos.lng, custPos.lat, custPos.lng).toFixed(3) + ' كم'; }
+        if (!o.isAccepted && !cache.hasRealShopCust) { refreshRealShopCustDistance(o.bon, shopPos, custPos); }
+    }
     var mapRef = riderMapMarkerRefs[String(o.bon)];
     var riderPos = (riderLiveMarker && riderLiveMarker.getLatLng()) || riderGlobalPos;
     if (shopPos && riderPos && phase !== 'delivering') {
@@ -4288,6 +4301,26 @@ async function refreshOrderCardRealCustDistance(bon, riderPos, custPos) {
             cache.hasRealCust = true;
             var el = document.getElementById('ocdist-cust-' + bon);
             if (el) { el.textContent = cache.distRiderCust; }
+        }
+    } catch (e) {}
+}
+
+// 🆕 نفس فكرة refreshOrderCardRealDistance بالظبط، بس للمسافة الحقيقية (مش خط
+// مستقيم) بين المحل والعميل نفسهم - ده الرقم اللي سعر التوصيل مبني عليه.
+// بتفضل تتحاول لحد ما الطلب يتقبل (شايفة الشرط في computeOrderDistances)
+var riderBgShopCustLastCalc = {}; // { bonKey: timestamp }
+async function refreshRealShopCustDistance(bon, shopPos, custPos) {
+    var cache = getOrderDistCache(bon);
+    var now = Date.now();
+    if (riderBgShopCustLastCalc[bon] && (now - riderBgShopCustLastCalc[bon]) < RIDER_BG_DISTANCE_INTERVAL_MS) return;
+    riderBgShopCustLastCalc[bon] = now;
+    try {
+        var data = await fetchOsrmRoute(shopPos, custPos.lat, custPos.lng, 1);
+        if (data && data.routes && data.routes[0]) {
+            cache.distShopCust = (data.routes[0].distance / 1000).toFixed(3) + ' كم';
+            cache.hasRealShopCust = true;
+            var el = document.getElementById('ocdist-cust-' + bon);
+            if (el) { el.textContent = cache.distShopCust; }
         }
     } catch (e) {}
 }
@@ -5192,7 +5225,11 @@ function acceptOrderLocally(bon) {
     setPendingAction(bon, 'accept', { name: orderName });
     updateBadges();
     if (!currentDrawerPage) renderCurrentTab(false);
-    var body = JSON.stringify({ action: 'updateFromReader', bon: bon, type: 'accept', pilotId: ACTIVE_PILOT_ID, pilotName: (localStorage.getItem('gebhaly_pilot_session') || '') });
+    // 🆕 بنبعت مسافة (المحل → العميل) اللي وصلنا لها لحظة القبول - السيرفر
+    // هيقفلها نهائي (لو مفيش رقم مقفول عنده أصلاً) وده اللي هيبقى أساس سعر
+    // التوصيل من دلوقتي، مايتغيرش تاني أياً كانت ظروف الشبكة بعد كده
+    var shopCustKmNow = order ? getOrderShopCustKm_(order) : 0;
+    var body = JSON.stringify({ action: 'updateFromReader', bon: bon, type: 'accept', pilotId: ACTIVE_PILOT_ID, pilotName: (localStorage.getItem('gebhaly_pilot_session') || ''), shopCustKm: shopCustKmNow });
     fetch(GOOGLE_SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body, redirect: 'follow' })
         .then(function(res) { return res.text(); })
         .then(function(text) {

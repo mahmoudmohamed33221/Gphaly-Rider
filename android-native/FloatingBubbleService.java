@@ -9,7 +9,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.location.Location;
 import android.location.LocationListener;
@@ -28,7 +27,6 @@ import android.view.WindowManager;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.FrameLayout;
-import android.graphics.drawable.GradientDrawable;
 
 // =========================================================================
 // 🆕 خدمة الأيقونة العائمة (زي أيقونة Talabat Rider / Messenger Chat Heads بالظبط):
@@ -200,17 +198,13 @@ public class FloatingBubbleService extends Service {
         int size = dp(56);
         bubbleView = new FrameLayout(this);
         bubbleView.setLayoutParams(new FrameLayout.LayoutParams(size, size));
-
-        GradientDrawable bg = new GradientDrawable();
-        bg.setShape(GradientDrawable.OVAL);
-        bg.setColor(Color.BLACK); // 🆕 خلفية سودة زي ما اتطلب
-        bg.setStroke(dp(2), Color.WHITE);
-        bubbleView.setBackground(bg);
-        bubbleView.setElevation(dp(6));
+        // 🆕 من غير أي دائرة/خلفية خالص - الأيقونة نفسها (بخلفيتها الشفافة) هي
+        // اللي بتظهر عائمة، مش "بابل" جواه أيقونة
+        bubbleView.setElevation(dp(4));
 
         ImageView icon = new ImageView(this);
-        // 🆕 اللوجو بقى أكبر جوه الدائرة (كان 0.6 بقى 0.86) عشان يملأ المساحة أكتر
-        FrameLayout.LayoutParams iconParams = new FrameLayout.LayoutParams((int) (size * 0.86), (int) (size * 0.86));
+        // اللوجو بياخد المساحة كلها تقريبًا دلوقتي طالما مفيش دايرة تحوّطه
+        FrameLayout.LayoutParams iconParams = new FrameLayout.LayoutParams(size, size);
         iconParams.gravity = Gravity.CENTER;
         icon.setLayoutParams(iconParams);
         try { icon.setImageResource(getApplicationInfo().icon); } catch (Exception e) {}

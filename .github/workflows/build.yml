@@ -151,7 +151,7 @@ jobs:
           fi
 
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          sed -i 's#<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />#<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />#' "$MANIFEST"
+          sed -i 's#<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />#<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />#' "$MANIFEST"
           if ! grep -q 'android:launchMode="singleTask"' "$MANIFEST"; then
             sed -i 's#android:name=".MainActivity"#android:name=".MainActivity"\n            android:launchMode="singleTask"#' "$MANIFEST"
           fi
@@ -183,7 +183,16 @@ jobs:
           tail -20 android/app/build.gradle
 
       - name: Generate app icons
-        run: npx capacitor-assets generate --android
+        run: |
+          # 🆕 لو سبنا capacitor-assets تشتغل بـ "Easy Mode" (icon.png لوحدها من غير
+          # خلفية محددة)، بيحط تلقائيًا خلفية بيضا صريحة ورا الأيقونة الافتراضية على
+          # أندرويد. فبنولّد له "خلفية شفافة" صريحة عشان يستخدمها بدل الأبيض الافتراضي
+          # (نفس بالظبط اللي بنعمله في ريبو Market).
+          command -v convert >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y imagemagick)
+          convert resources/icon.png -resize 1024x1024 resources/icon-only.png
+          convert resources/icon.png -resize 1024x1024 resources/icon-foreground.png
+          convert -size 1024x1024 xc:none PNG32:resources/icon-background.png
+          npx capacitor-assets generate --android
 
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew

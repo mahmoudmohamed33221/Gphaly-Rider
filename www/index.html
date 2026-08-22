@@ -12,10 +12,10 @@
     <script src="capacitor.js"></script>
     <style>
         :root {
-            --bg: #0B0F19;
-            --bg2: #111827;
-            --card: #111827;
-            --card-up: #1F2937;
+            --bg: #000000;
+            --bg2: #0A0A0A;
+            --card: #0A0A0A;
+            --card-up: #121212;
             --accent: #00E676;
             --accent-dim: #00C853;
             --accent-glow: rgba(0,230,118,0.15);
@@ -93,7 +93,7 @@
         .auth-btns { display: flex; flex-direction: column; gap: 10px; margin-top: 24px; }
 
         /* ==================== تعديل الهيدر والكونتينر العام ==================== */
-        .app-hdr{position:fixed;top:0;left:0;right:0;height:var(--hdr-h);background:rgba(17,24,39,.92);backdrop-filter:blur(14px);border-bottom:1px solid var(--border-subtle);display:flex;flex-direction:column;justify-content:center;gap:8px;padding:8px 16px;z-index:100;}
+        .app-hdr{position:fixed;top:0;left:0;right:0;height:var(--hdr-h);background:rgba(0,0,0,.92);backdrop-filter:blur(14px);border-bottom:1px solid var(--border-subtle);display:flex;flex-direction:column;justify-content:center;gap:8px;padding:8px 16px;z-index:100;}
         .hdr-row-top{display:flex;align-items:center;justify-content:space-between;flex-direction:row-reverse;gap:10px;}
         .hdr-line-one{display:flex;align-items:center;gap:10px;flex:1;min-width:0;overflow:hidden;}
         .hdr-title-txt{font-size:19px;font-weight:900;color:var(--accent);white-space:nowrap;order:1;flex-shrink:0;}
@@ -202,7 +202,7 @@
         .oc-time-lbl{display:block;font-size:9px;color:var(--dim);font-weight:600;}
         .oc-time-val{display:block;font-size:13px;font-weight:700;color:var(--fg);margin-top:3px;direction:ltr;}
 
-        .oc-info-box{position:relative;z-index:1;margin:12px 16px 10px;padding:11px 12px;border-radius:12px;background:rgba(11,15,25,.6);border:1px solid var(--border);}
+        .oc-info-box{position:relative;z-index:1;margin:12px 16px 10px;padding:11px 12px;border-radius:12px;background:rgba(0,0,0,.6);border:1px solid var(--border);}
         .oc-info-top{display:flex;justify-content:space-between;align-items:center;gap:8px;}
         .oc-name-row{display:flex;align-items:center;gap:6px;min-width:0;flex:1;}
         .oc-name-row i{color:var(--accent);font-size:13px;width:16px;text-align:center;flex-shrink:0;}
@@ -213,9 +213,9 @@
         .oc-chat-btn:active{background:#F97316;color:#000;transform:scale(.9);}
 
         /* 🆕 شات المندوب والعميل - لايف فوري من غير انتظار رد الطرف التاني */
-        .rc-chat-overlay{position:fixed;inset:0;z-index:6000;background:var(--bg,#0B0F19);display:none;flex-direction:column;}
+        .rc-chat-overlay{position:fixed;inset:0;z-index:6000;background:var(--bg,#000000);display:none;flex-direction:column;}
         .rc-chat-overlay.show{display:flex;}
-        .rc-chat-header{display:flex;align-items:center;gap:.75rem;padding:.9rem 1rem;border-bottom:1px solid rgba(255,255,255,.08);background:#111827;flex-shrink:0;}
+        .rc-chat-header{display:flex;align-items:center;gap:.75rem;padding:.9rem 1rem;border-bottom:1px solid rgba(255,255,255,.08);background:#0A0A0A;flex-shrink:0;}
         .rc-chat-header .rc-back-btn{color:var(--accent);font-size:1.1rem;flex-shrink:0;background:none;border:none;}
         .rc-chat-header .rc-title{font-weight:800;font-size:.9rem;color:#fff;flex:1;min-width:0;}
         .rc-chat-header .rc-title .rc-title-line1{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -224,14 +224,14 @@
         .rc-chat-body{flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:.6rem;}
         .rc-bubble{max-width:78%;padding:.55rem .9rem;border-radius:1.1rem;font-size:.85rem;line-height:1.45;word-break:break-word;}
         .rc-bubble.me{align-self:flex-end;background:linear-gradient(135deg,var(--accent),#0891B2);color:#001;font-weight:700;border-bottom-left-radius:.3rem;}
-        .rc-bubble.them{align-self:flex-start;background:#111827;border:1px solid rgba(255,255,255,.08);color:#E5E7EB;border-bottom-right-radius:.3rem;}
+        .rc-bubble.them{align-self:flex-start;background:#0A0A0A;border:1px solid rgba(255,255,255,.08);color:#E5E7EB;border-bottom-right-radius:.3rem;}
         .rc-empty-hint{text-align:center;color:var(--dim,#94A3B8);font-size:.8rem;padding:2rem 1rem;}
         .rc-quick-bar{display:flex;gap:.5rem;overflow-x:auto;padding:.6rem 1rem;border-top:1px solid rgba(255,255,255,.08);flex-shrink:0;-webkit-overflow-scrolling:touch;}
         .rc-quick-bar::-webkit-scrollbar{display:none;}
         .rc-quick-pill{flex-shrink:0;white-space:nowrap;padding:.45rem 1rem;border-radius:999px;border:1px solid var(--accent-border);background:var(--accent-glow);color:var(--accent);font-size:.75rem;font-weight:600;}
         .rc-quick-pill:active{background:var(--accent);color:#000;}
-        .rc-input-row{display:flex;align-items:center;gap:.6rem;padding:.75rem 1rem;border-top:1px solid rgba(255,255,255,.08);background:#111827;flex-shrink:0;}
-        .rc-input-row input{flex:1;background:#0B0F19;border:1px solid rgba(255,255,255,.1);border-radius:999px;padding:.65rem 1rem;color:#fff;font-size:.85rem;outline:none;}
+        .rc-input-row{display:flex;align-items:center;gap:.6rem;padding:.75rem 1rem;border-top:1px solid rgba(255,255,255,.08);background:#0A0A0A;flex-shrink:0;}
+        .rc-input-row input{flex:1;background:#000000;border:1px solid rgba(255,255,255,.1);border-radius:999px;padding:.65rem 1rem;color:#fff;font-size:.85rem;outline:none;}
         .rc-send-btn{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#0891B2);color:#001;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;}
         .rc-send-btn:active{transform:scale(.94);}
         .rc-typing-indicator{align-self:flex-start;display:flex;align-items:center;gap:7px;font-size:12px;color:var(--dim,#94A3B8);padding:8px 12px;background:rgba(255,255,255,.04);border-radius:14px 14px 14px 4px;}
@@ -253,7 +253,7 @@
         .rc-status-icon.rc-read{color:#0891B2;text-shadow:0 0 5px rgba(34,211,238,.9);}
         .rc-msg-time{font-size:9px;color:rgba(0,17,17,.5);line-height:1;}
         .rc-bubble.them .rc-msg-time{color:var(--dim,#94A3B8);}
-        .rc-unread-badge{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;border-radius:999px;background:#EF4444;color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid #0B0F19;}
+        .rc-unread-badge{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;border-radius:999px;background:#EF4444;color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid #000000;}
         /* 🆕 وميض الكارت لما نيجي منه من إشعار "طلب جديد" - يلفت النظر له بسرعة */
         @keyframes rcCardBlink { 0%, 100% { background: transparent; } 50% { background: rgba(250,204,21,.35); } }
         .rc-blink-highlight { animation: rcCardBlink .5s ease-in-out 5; }
@@ -455,8 +455,8 @@
         .rdr-map-empty{padding:14px 16px;font-size:12px;color:var(--dim);text-align:center;}
         .leaflet-tooltip.rdr-tooltip{background:transparent;border:none;box-shadow:none;padding:0;transition:opacity .2s;}
         .leaflet-tooltip.rdr-tooltip::before{display:none;}
-        .rdr-tt-card{position:relative;background:#111827;color:#fff;border:1.5px solid rgba(255,255,255,.35);border-radius:9px;padding:4px 9px;font-family:'Cairo',sans-serif;text-align:center;box-shadow:0 3px 10px rgba(0,0,0,.45);line-height:1.3;text-shadow:0 1px 2px rgba(0,0,0,.55);min-width:76px;}
-        .rdr-tt-card::after{content:'';position:absolute;left:50%;bottom:-6px;transform:translateX(-50%);width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:7px solid var(--tt-color, #111827);filter:drop-shadow(0 1.5px 1px rgba(0,0,0,.3));}
+        .rdr-tt-card{position:relative;background:#0A0A0A;color:#fff;border:1.5px solid rgba(255,255,255,.35);border-radius:9px;padding:4px 9px;font-family:'Cairo',sans-serif;text-align:center;box-shadow:0 3px 10px rgba(0,0,0,.45);line-height:1.3;text-shadow:0 1px 2px rgba(0,0,0,.55);min-width:76px;}
+        .rdr-tt-card::after{content:'';position:absolute;left:50%;bottom:-6px;transform:translateX(-50%);width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:7px solid var(--tt-color, #0A0A0A);filter:drop-shadow(0 1.5px 1px rgba(0,0,0,.3));}
         .rdr-tt-bon{font-size:10.5px;font-weight:900;}
         .rdr-tt-name{font-size:10px;font-weight:700;}
         .rdr-tt-sub{font-size:9.5px;font-weight:600;opacity:.92;}
@@ -468,7 +468,7 @@
         .rdr-tooltip.rdr-tooltip-focus .rdr-tt-dist{font-size:11px;}
         .leaflet-tooltip.rdr-tooltip{pointer-events:none;}
         .rdr-tt-card{pointer-events:none;}
-        .rdr-route-btn{pointer-events:auto;margin-top:6px;background:#fff;color:#0B0F19;border:none;padding:7px 12px;border-radius:7px;font-size:11px;font-weight:800;display:flex;align-items:center;gap:5px;cursor:pointer;width:100%;justify-content:center;}
+        .rdr-route-btn{pointer-events:auto;margin-top:6px;background:#fff;color:#000000;border:none;padding:7px 12px;border-radius:7px;font-size:11px;font-weight:800;display:flex;align-items:center;gap:5px;cursor:pointer;width:100%;justify-content:center;}
         .rdr-map-backbtn{position:absolute;bottom:16px;right:14px;z-index:1000;background:var(--card-up);color:#fff;border:1px solid rgba(255,255,255,.18);padding:10px 16px;border-radius:30px;font-size:12px;font-weight:800;align-items:center;gap:6px;box-shadow:0 4px 14px rgba(0,0,0,.45);}
         .rdr-map-locatebtn{position:absolute;bottom:16px;left:14px;z-index:1000;background:var(--card-up);color:var(--accent);width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.18);box-shadow:0 4px 14px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;font-size:17px;}
         .rdr-route-info{display:none;position:absolute;top:10px;left:10px;right:10px;z-index:1000;background:var(--card-up);border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:10px 12px;font-size:11.5px;color:#fff;align-items:center;justify-content:space-between;gap:8px;box-shadow:0 4px 14px rgba(0,0,0,.4);}
@@ -477,7 +477,7 @@
         .rdr-route-choice-title{font-size:14px;font-weight:900;color:#fff;margin-bottom:14px;}
         .rdr-route-choice-btn{width:100%;padding:12px;border-radius:10px;font-size:12.5px;font-weight:800;margin-top:9px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;font-family:'Cairo',sans-serif;}
         .rdr-route-choice-btn.primary{background:var(--accent);color:#04140A;}
-        .rdr-route-choice-btn.secondary{background:#fff;color:#0B0F19;}
+        .rdr-route-choice-btn.secondary{background:#fff;color:#000000;}
         .rdr-route-choice-btn.cancel{background:transparent;color:var(--dim);font-weight:700;margin-top:6px;}
         .bnav-badge{position:absolute;top:6px;right:22%;background:var(--danger);color:#fff;font-size:9px;font-weight:800;min-width:17px;height:17px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 4px;animation:popIn .3s ease;}
         @keyframes popIn{from{transform:scale(0)}to{transform:scale(1)}}
@@ -506,7 +506,7 @@
             bottom:calc(var(--nav-h) + 10px);
             left:16px;
             right:16px;
-            background:rgba(17,24,39,.97);
+            background:rgba(0,0,0,.97);
             backdrop-filter:blur(14px);
             border:1px solid var(--border);
             border-radius:16px;
@@ -588,7 +588,7 @@
             position: fixed; bottom: calc(var(--nav-h) + 12px); left: 16px; right: 16px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; pointer-events: none;
         }
         .system-notif {
-            background: linear-gradient(135deg, var(--bg2), #1F2937); border: 2px solid var(--accent); border-radius: 16px; padding: 16px; display: flex; align-items: center; gap: 12px; box-shadow: 0 10px 30px rgba(0, 230, 118, 0.3); pointer-events: auto; transform: translateY(0); transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.2s ease, left 0.1s linear; position: relative; user-select: none; touch-action: none; cursor: pointer;
+            background: linear-gradient(135deg, var(--bg2), #121212); border: 2px solid var(--accent); border-radius: 16px; padding: 16px; display: flex; align-items: center; gap: 12px; box-shadow: 0 10px 30px rgba(0, 230, 118, 0.3); pointer-events: auto; transform: translateY(0); transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.2s ease, left 0.1s linear; position: relative; user-select: none; touch-action: none; cursor: pointer;
         }
         .system-notif-icon {
             width: 44px; height: 44px; background: rgba(0, 230, 118, 0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--accent); font-size: 20px; flex-shrink: 0; animation: bellRing 1s ease infinite;
@@ -2718,11 +2718,15 @@ async function initFloatingBubbleBridge() {
 // من على كل تغيير في حالة ظهور الصفحة (visibilitychange)، وكمان دوريًا كإجراء
 // وقائي (self-healing) عشان تضمن الخدمة ترجع تشتغل فورًا لو نظام التشغيل قفلها
 // لأي سبب (ضغط ذاكرة، مسح من التطبيقات الأخيرة، إلخ)
+// 🆕 الأيقونة العائمة ملهاش لازمة أصلاً لو المندوب "لا يعمل" (مفيش طلبات
+// هتوصله أصلاً)، فبنوقفها تمامًا في الحالة دي، وبترجع تشتغل تلقائي أول ما
+// يحوّل لـ"يعمل"
 async function syncBubbleWithAppState() {
     if (!isRunningInsideNativeApp()) return;
     var fb = window.Capacitor.Plugins && window.Capacitor.Plugins.FloatingBubble;
     if (!fb) return;
     try {
+        if (!riderWorkingNow) { if (fb.stopBubble) await fb.stopBubble(); return; }
         var ov = await fb.checkOverlayPermission();
         if (!ov.granted) return; // البوابة الإجبارية فوق هتطلب الإذن ده، مفيش داعي نعمل حاجة هنا
         await fb.startBubble(); // 🆕 دايمًا بنتأكد إنها شغالة - لو شغالة بالفعل، النداء ده بلا أي تأثير (idempotent)
@@ -3998,6 +4002,7 @@ function confirmStopWork() {
     renderWorkToggleBtn();
     syncWorkStatusToServer_(false);
     renderCurrentTab(false);
+    try { syncBubbleWithAppState(); } catch (e) {} // 🆕 يوقف الأيقونة العائمة فورًا
 }
 
 function confirmStartWork() {
@@ -4006,6 +4011,7 @@ function confirmStartWork() {
     syncWorkStatusToServer_(true);
     renderCurrentTab(false);
     try { manualRefresh(); } catch (e) {}
+    try { syncBubbleWithAppState(); } catch (e) {} // 🆕 يشغّل الأيقونة العائمة فورًا
 }
 
 async function startGlobalPositionWatch() {

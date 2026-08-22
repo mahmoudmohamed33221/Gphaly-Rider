@@ -75,6 +75,25 @@ jobs:
           echo "----- AndroidManifest.xml بعد التعديل -----"
           cat "$MANIFEST"
 
+      # 🆕 تعطيل "النسخ الاحتياطي التلقائي" بتاع أندرويد (Auto Backup for Apps).
+      # من غير الخطوة دي، أندرويد بياخد نسخة احتياطية من بيانات التطبيق (بما فيها
+      # تخزين المتصفح الداخلي اللي فيه مثلًا قائمة "تم التسليم") على جوجل درايڤ
+      # بتاع المستخدم تلقائيًا. لو الطيار مسح التطبيق ونزّله تاني وهو داخل بنفس
+      # حساب الجوجل، أندرويد كان بيرجّع البيانات القديمة دي من تلقاء نفسه من غير
+      # ما حد يحس - وده اللي كان بيخلي قائمة "تم التسليم" ترجع تاني بعد إعادة
+      # التثبيت رغم إنها كانت اتمسحت فعلًا بـ"إنهاء حساب الطيار". القالب الافتراضي
+      # بتاع Capacitor بيحط android:allowBackup="true"، فبنقلبها هنا لـ "false".
+      - name: Disable Android auto backup
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          if grep -q 'android:allowBackup="true"' "$MANIFEST"; then
+            sed -i 's#android:allowBackup="true"#android:allowBackup="false"#' "$MANIFEST"
+          elif ! grep -q 'android:allowBackup=' "$MANIFEST"; then
+            sed -i 's#<application#<application\n        android:allowBackup="false"#' "$MANIFEST"
+          fi
+          echo "----- AndroidManifest.xml بعد التعديل -----"
+          cat "$MANIFEST"
+
       # 🆕 الأيقونة العائمة (Floating Bubble) - كود Android أصلي مش بيتولّد تلقائيًا
       # من Capacitor، فبننسخه يدويًا لمجلد المشروع بعد ما "cap add android" يعمل
       # الهيكل الأساسي، وبنسجّله كـ Capacitor Plugin جوه MainActivity، وبنضيف

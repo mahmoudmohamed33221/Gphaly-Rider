@@ -47,7 +47,7 @@
             background-position: center center;
             background-repeat: no-repeat;
             background-size: 280px;
-            opacity: 0.06;
+            opacity: 0.08;
             pointer-events: none;
             z-index: 0;
         }
@@ -134,7 +134,7 @@
             background-position: center center;
             background-repeat: no-repeat;
             background-size: 200px;
-            opacity: 0.07;
+            opacity: 0.08;
             pointer-events: none;
         }
         .drawer-panel.open{transform:translateX(0);}
@@ -391,7 +391,7 @@
             background-position: center center;
             background-repeat: no-repeat;
             background-size: 180px;
-            opacity: 0.07;
+            opacity: 0.08;
             pointer-events: none;
         }
         
@@ -547,6 +547,20 @@
         .cfm-icon.dan{background:rgba(239,68,68,.12);color:var(--danger);}
         .cfm-icon.ok{background:rgba(0,230,118,.12);color:var(--accent);}
         .cfm-icon.warn{background:rgba(245,158,11,0.12);color:var(--warn);}
+        /* 🆕 محفظة الطيار - تحذير أحمر فسفوري نابض/وامض */
+        .wallet-flash-warn{margin-top:12px;padding:12px 14px;border-radius:12px;background:rgba(255,23,68,.1);border:1.5px solid #FF1744;color:#FF1744;font-weight:900;font-size:15px;text-align:center;line-height:1.7;animation:walletFlash 1s ease-in-out infinite;}
+        @keyframes walletFlash{0%,100%{opacity:1;text-shadow:0 0 6px rgba(255,23,68,.9),0 0 16px rgba(255,23,68,.6);}50%{opacity:.5;text-shadow:0 0 2px rgba(255,23,68,.3);}}
+        .wallet-hero{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:22px 18px;text-align:center;margin-bottom:14px;}
+        .wallet-hero .amt{font-size:38px;font-weight:900;color:var(--accent);direction:ltr;display:block;}
+        .wallet-hero.locked .amt{color:var(--danger);}
+        .wallet-hero.warn75 .amt{color:#FF1744;}
+        .wallet-hero .cur{font-size:14px;color:var(--dim);font-weight:700;}
+        .wallet-bar-track{height:14px;border-radius:7px;background:var(--bg);border:1px solid var(--border);overflow:hidden;margin:14px 0 8px;}
+        .wallet-bar-fill{height:100%;border-radius:7px;background:var(--accent);transition:width .4s ease;}
+        .wallet-bar-fill.warn75{background:#FF1744;}
+        .wallet-bar-fill.locked{background:var(--danger);}
+        .wallet-bar-labels{display:flex;justify-content:space-between;font-size:11px;color:var(--dim);font-weight:700;direction:ltr;}
+        .wallet-lock-banner{background:rgba(239,68,68,.1);border:1.5px solid var(--danger);color:var(--danger);border-radius:14px;padding:14px;text-align:center;font-weight:800;font-size:13px;line-height:1.8;margin-bottom:14px;}
         .cfm-txt{text-align:center;font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:6px;}
 
         .svc-off{text-align:center;padding:40px 20px;}
@@ -758,6 +772,7 @@
     <div class="drawer-items">
         <div class="drawer-item" onclick="openDrawerPage('profile')"><i class="fa-solid fa-user-gear"></i><span>الصفحة الشخصية</span></div>
         <div class="drawer-item" onclick="openDrawerPage('account')"><i class="fa-solid fa-wallet"></i><span>الأرباح</span></div>
+        <div class="drawer-item" onclick="openDrawerPage('wallet')"><i class="fa-solid fa-sack-dollar"></i><span>المحفظة</span><span id="walletDrawerBadge" style="display:none;background:var(--danger);color:#fff;font-size:10px;font-weight:800;min-width:18px;height:18px;border-radius:9px;align-items:center;justify-content:center;padding:0 5px;"></span></div>
         <div class="drawer-item" onclick="openInbox()"><i class="fa-solid fa-envelope"></i><span>البريد الوارد</span><span id="inboxDrawerBadge" style="display:none;background:var(--danger);color:#fff;font-size:10px;font-weight:800;min-width:18px;height:18px;border-radius:9px;align-items:center;justify-content:center;padding:0 5px;"></span></div>
         <div class="drawer-divider"></div>
         <div class="drawer-item" onclick="openDrawerPage('help')"><i class="fa-solid fa-headset"></i><span>المساعده والدعم</span></div>
@@ -821,7 +836,7 @@
 </div>
 
 <script>
-var GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxmOyapE5Hjv7esYlosZhNdK05kDm65Y2wblqynWCIHAxspe9eR__yiddNxq25HLLBJeA/exec";
+var GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzvOtUpqNAT70MW3h-MhhoLhqOehAN4ZF9oA5T_4-CXZAro413fosEop8OF_m_gLqstkw/exec";
 var APP_VERSION = "3.0.1"; // لازم يطابق قيمة الخلية D2 في الشيت، وإلا هيظهر تحديث إجباري
 
 // ⚡ عزل بيانات كل طيار عن التاني على نفس الجهاز: كل بيانات الطيار (أرباح/سجل/طلبات...) بتتخزن
@@ -1365,6 +1380,8 @@ function submitLogin() {
             }
             // ⚡ إعادة حساب هوية الطيار النشط، عشان لو ده جهاز اتستخدم قبل كده مع طيار تاني، كل واحد يشوف بياناته هو بس
             ACTIVE_PILOT_ID = computeActivePilotId();
+            walletInitialized = false; // 🆕 كل تسجيل دخول جديد يبدأ بتهيئة محفظة جديدة (من غير ما يعرض أي تنبيه فورًا)
+            initWalletSilently(data.wallet || 0);
             try { acceptedAtTimes = JSON.parse(localStorage.getItem(pk('gebhaly_accepted_times'))) || {}; } catch(e) { acceptedAtTimes = {}; }
             allOrders = []; knownBons = new Set(); currentTab = 'new'; openDetails = new Set();
             riderWorkingNow = false; // 🆕 كل تسجيل دخول جديد يبدأ بحالة "لا يعمل"
@@ -1645,14 +1662,15 @@ function trySyncPendingActions() {
                     return;
                 }
                 var payload = { action: 'updateFromReader', bon: bonKey, type: type, pilotId: ACTIVE_PILOT_ID, pilotName: (localStorage.getItem('gebhaly_pilot_session') || '') };
-                if (type === 'deliver') { payload.orderCost = entry.orderCost || 0; payload.deliveryCost = entry.deliveryCost || 0; }
+                if (type === 'deliver') { payload.orderCost = entry.orderCost || 0; payload.deliveryCost = entry.deliveryCost || 0; payload.adminFee = entry.adminFee || 0; }
                 var body = JSON.stringify(payload);
                 return fetch(GOOGLE_SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body, redirect: 'follow' })
                     .then(function(res2) { return res2.text(); })
                     .then(function(text2) {
                         var data; try { data = JSON.parse(text2); } catch(e) { data = null; }
-                        if (data && data.status === 'success') { removePendingAction(bonKey); }
+                        if (data && data.status === 'success') { removePendingAction(bonKey); if (type === 'deliver' && typeof data.wallet !== 'undefined') handleWalletUpdate(data.wallet); }
                         else if (data && data.status === 'already_accepted') { rejectLostRaceOrder(bonKey, entry.name || ''); }
+                        else if (data && data.status === 'wallet_locked' && type === 'accept') { rejectWalletLockedOrder(bonKey, data.wallet); }
                     });
             })
             .catch(function() {});
@@ -1763,6 +1781,7 @@ function renderCurrentTab(animate) {
         if (existingReplyBar) existingReplyBar.remove();
     }
     if (currentDrawerPage === 'account') { renderDrawerAccount(); return; }
+    if (currentDrawerPage === 'wallet') { renderDrawerWallet(); return; }
     if (currentDrawerPage === 'profile') { renderDrawerProfile(); return; }
     if (currentDrawerPage === 'about') { renderDrawerAbout(); return; }
     if (currentDrawerPage === 'help') { renderDrawerHelp(); return; }
@@ -1833,6 +1852,96 @@ function renderDrawerAccount() {
         '<button class="act-btn info" onclick="openEarningsHistory()" style="margin-top:12px;width:100%;"><i class="fa-solid fa-clock-rotate-left"></i> سجل الأرباح الكامل</button>' +
         '<button class="end-shift-btn" onclick="openEndShiftModal()" style="margin-top:10px;"><i class="fa-solid fa-power-off"></i>إنهاء حساب الطيار</button>' +
     '</div>';
+}
+
+// =========================================================================
+// 🆕 نظام "محفظة الطيار" - المصاريف الإدارية المُجمّعة اللي المفروض تتحول
+// لمسؤل الماديات في الشركة. الرصيد الحقيقي دايمًا مصدره الشيت (الإدارة تقدر
+// تعدله يدويًا وقتها ما تحب)، والتطبيق بيزامن كل 6 ثواني (نفس دورة الفحص
+// الدوري الموجودة أصلًا) + بيحدّث محليًا فورًا لحظة تسليم أي أوردر عشان
+// الطيار يحس بالتغيير فورًا من غير ما يستنى.
+// =========================================================================
+var WALLET_LIMIT = 100;
+var WALLET_WARN_1 = 50;
+var WALLET_WARN_2 = 75;
+var pilotWalletLocked = false;
+var walletInitialized = false;
+
+function getLocalWallet() { return Number(localStorage.getItem(pk('gebhaly_pilot_wallet'))) || 0; }
+
+// بيتنادى أول ما نعرف رصيد المحفظة (من تسجيل الدخول) - بيسجل الرصيد الأولي
+// من غير ما يعرض أي تحذير (مش دي لحظة "تجاوز حد" فعلية)
+function initWalletSilently(wallet) {
+    wallet = Number(wallet) || 0;
+    localStorage.setItem(pk('gebhaly_pilot_wallet'), wallet);
+    pilotWalletLocked = wallet >= WALLET_LIMIT;
+    walletInitialized = true;
+    updateWalletDrawerBadge();
+}
+
+// بيتنادى في أي وقت وصل فيه رصيد محفظة جديد (من فحص دوري أو بعد تسليم
+// أوردر) - بيقارن بالرصيد القديم المحفوظ محليًا، ولو اتخطينا عتبة (50/75/100)
+// دلوقتي بيعرض التنبيه المناسب
+function handleWalletUpdate(newWallet) {
+    newWallet = Math.round((Number(newWallet) || 0) * 100) / 100;
+    if (!walletInitialized) { initWalletSilently(newWallet); return; }
+    var prev = getLocalWallet();
+    localStorage.setItem(pk('gebhaly_pilot_wallet'), newWallet);
+    pilotWalletLocked = newWallet >= WALLET_LIMIT;
+    updateWalletDrawerBadge();
+    if (currentDrawerPage === 'wallet') renderDrawerWallet();
+    if (newWallet < prev) return; // 🆕 الرصيد قل (الإدارة صفّرته أو خصمت منه) - مفيش داعي لأي تنبيه
+    if (prev < WALLET_LIMIT && newWallet >= WALLET_LIMIT) { openWalletLockedModal(newWallet); }
+    else if (prev < WALLET_WARN_2 && newWallet >= WALLET_WARN_2) { openWalletWarningModal(newWallet); }
+    else if (prev < WALLET_WARN_1 && newWallet >= WALLET_WARN_1) { openWalletWarningModal(newWallet); }
+}
+
+function updateWalletDrawerBadge() {
+    var b = document.getElementById('walletDrawerBadge');
+    if (!b) return;
+    if (pilotWalletLocked) { b.style.display = 'flex'; b.textContent = '!'; }
+    else { b.style.display = 'none'; }
+}
+
+function openWalletWarningModal(amount) {
+    var box = document.getElementById('modalBox');
+    box.innerHTML = '<div class="modal-bar"></div>' +
+        '<div class="cfm-icon warn"><i class="fa-solid fa-sack-dollar"></i></div>' +
+        '<div class="modal-ttl">المحفظة وصلت ' + fmtMoney(amount) + ' ج.م</div>' +
+        '<p class="cfm-txt">برجاء التواصل مع الإدارة لإرسال المبلغ الحالي في محفظتك.</p>' +
+        '<div class="wallet-flash-warn">احذر: إذا وصلت المحفظة إلى 100 ج.م، لن تتمكن من قبول الطلبات وقتها!</div>' +
+        '<div class="modal-btns" style="margin-top:14px;"><button class="act-btn sec" style="flex:1;" onclick="closeModal()">حسناً</button><button class="act-btn pri" style="flex:2;" onclick="closeModal();openSupportChatHome();"><i class="fa-solid fa-headset"></i> تواصل مع الإدارة</button></div>';
+    document.getElementById('modalBg').classList.add('show');
+}
+
+function openWalletLockedModal(amount) {
+    var box = document.getElementById('modalBox');
+    box.innerHTML = '<div class="modal-bar"></div>' +
+        '<div class="cfm-icon dan"><i class="fa-solid fa-lock"></i></div>' +
+        '<div class="modal-ttl">تم إيقاف قبول الطلبات لديك</div>' +
+        '<p class="cfm-txt">رصيد محفظتك وصل <b style="color:var(--danger);" dir="ltr">' + fmtMoney(amount) + ' ج.م</b>. قم بالتواصل مع الإدارة لإرسال المبلغ الحالي وإعادة تفعيل قبول الطلبات لديك.</p>' +
+        '<div class="modal-btns"><button class="act-btn pri" style="width:100%;" onclick="closeModal();openSupportChatHome();"><i class="fa-solid fa-headset"></i> تواصل مع الإدارة</button></div>';
+    document.getElementById('modalBg').classList.add('show');
+}
+
+function renderDrawerWallet() {
+    var main = document.getElementById('mainContent');
+    var wallet = getLocalWallet();
+    var pct = Math.min(100, Math.round((wallet / WALLET_LIMIT) * 100));
+    var heroClass = pilotWalletLocked ? 'locked' : (wallet >= WALLET_WARN_2 ? 'warn75' : '');
+    var barClass = pilotWalletLocked ? 'locked' : (wallet >= WALLET_WARN_2 ? 'warn75' : '');
+    var html = '<div class="tab-pane on">';
+    html += '<div class="tab-head"><h2><i class="fa-solid fa-sack-dollar" style="margin-left:6px;color:var(--accent);"></i>المحفظة</h2></div>';
+    if (pilotWalletLocked) {
+        html += '<div class="wallet-lock-banner"><i class="fa-solid fa-triangle-exclamation"></i> تم إيقاف قبول الطلبات لديك. قم بالتواصل مع الإدارة لإرسال المبلغ الحالي وإعادة تفعيل قبول الطلبات لديك.</div>';
+    }
+    html += '<div class="wallet-hero ' + heroClass + '"><span class="cur">رصيد المصاريف الإدارية الحالي</span><span class="amt" dir="ltr">' + fmtMoney(wallet) + ' ج.م</span>' +
+        '<div class="wallet-bar-track"><div class="wallet-bar-fill ' + barClass + '" style="width:' + pct + '%;"></div></div>' +
+        '<div class="wallet-bar-labels"><span>0</span><span>' + WALLET_LIMIT + ' ج.م (الحد الأقصى)</span></div></div>';
+    html += '<div class="dp-card"><div class="dp-row"><i class="fa-solid fa-circle-info ic"></i><div class="txt"><h4>إيه هي المحفظة؟</h4><p style="line-height:1.7;">كل ما تسلّم أوردر، المصاريف الإدارية بتاعته بتتجمع هنا. لو وصلت المحفظة 100 ج.م، هيتوقف قبول أوردرات جديدة لحد ما تحوّل المبلغ لمسؤل الماديات في الشركة.</p></div></div></div>';
+    html += '<button class="act-btn info" style="margin-top:12px;width:100%;" onclick="openSupportChatHome()"><i class="fa-solid fa-headset"></i> تواصل مع الإدارة لتسديد المحفظة</button>';
+    html += '</div>';
+    main.innerHTML = html;
 }
 
 function renderDrawerProfile() {
@@ -5054,6 +5163,7 @@ function checkPilotStatusMidSession() {
             var data; try { data = JSON.parse(text); } catch(e) { data = null; }
             if (data && data.status === 'suspended_temp') { showPilotSuspendedScreen('تم إيقافك مؤقتًا', data.message || 'أنت موقوف مؤقتًا، يرجى التواصل مع الإدارة لحل المشكلة'); }
             else if (data && data.status === 'suspended_permanent') { showPilotSuspendedScreen('تم إيقافك بشكل دائم', data.message || 'تم إيقاف حسابك بشكل دائم من قبل الإدارة'); }
+            else if (data && data.status === 'active' && typeof data.wallet !== 'undefined') { handleWalletUpdate(data.wallet); }
         })
         .catch(function() {});
 }
@@ -5073,6 +5183,9 @@ function showPilotSuspendedScreen(title, msg) {
 // =========================================================================
 
 function acceptOrderLocally(bon) {
+    // 🆕 لو محفظة الطيار وصلت للحد الأقصى، امنعه من قبول أي أوردر جديد فورًا
+    // من غير ما نستنى رد السيرفر أصلًا
+    if (pilotWalletLocked) { openWalletLockedModal(getLocalWallet()); return; }
     var idx = findOrderIndex(bon);
     var order = idx !== -1 ? allOrders[idx] : null;
     var orderName = order ? order.name : '';
@@ -5087,8 +5200,22 @@ function acceptOrderLocally(bon) {
             var data; try { data = JSON.parse(text); } catch(e) { data = null; }
             if (data && data.status === 'success') { removePendingAction(bon); if (!currentDrawerPage) renderCurrentTab(false); }
             else if (data && data.status === 'already_accepted') { rejectLostRaceOrder(bon, orderName); }
+            else if (data && data.status === 'wallet_locked') { rejectWalletLockedOrder(bon, data.wallet); }
         })
         .catch(function() { console.error('تعذر إبلاغ السيرفر بقبول الطلب - هيتم إعادة المحاولة تلقائياً'); });
+}
+
+// ⚡ السيرفر رفض القبول لإن المحفظة وصلت للحد الأقصى (حالة نادرة: الفحص
+// المحلي كان قديم شوية) - نتراجع عن القبول المحلي ونعرض نفس رسالة القفل
+function rejectWalletLockedOrder(bon, wallet) {
+    removePendingAction(bon);
+    removeAcceptedTime(bon);
+    var idx = findOrderIndex(bon);
+    if (idx !== -1) { knownBons.delete(allOrders[idx].bon); allOrders.splice(idx, 1); }
+    updateBadges();
+    if (!currentDrawerPage) renderCurrentTab(false);
+    handleWalletUpdate(wallet);
+    openWalletLockedModal(wallet);
 }
 
 // ⚡ لما طيار تاني ياخد الطلب قبلي (لحظة تعارض)، نلغي القبول المحلي فورًا ونوضحله اللي حصل
@@ -5135,12 +5262,20 @@ function deliverOrderLocally(bon, orderCost, deliveryCost, adminFee) {
     setPendingAction(bon, 'deliver', { orderCost: Number(orderCost) || 0, deliveryCost: Number(deliveryCost) || 0, adminFee: Number(adminFee) || 0 });
     updateBadges();
     if (!currentDrawerPage) renderCurrentTab(false);
+    // 🆕 تحديث تفاؤلي فوري لرصيد المحفظة محليًا (قبل رد السيرفر) عشان الطيار
+    // يحس بالتحديث فورًا - هيتصحح لاحقًا برصيد السيرفر الحقيقي (رد التسليم
+    // أو أقرب فحص دوري)
+    handleWalletUpdate(getLocalWallet() + (Number(adminFee) || 0));
     var body = JSON.stringify({ action: 'updateFromReader', bon: bon, type: 'deliver', orderCost: Number(orderCost) || 0, deliveryCost: Number(deliveryCost) || 0, adminFee: Number(adminFee) || 0, pilotId: ACTIVE_PILOT_ID });
     fetch(GOOGLE_SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body, redirect: 'follow' })
         .then(function(res) { return res.text(); })
         .then(function(text) {
             var data; try { data = JSON.parse(text); } catch(e) { data = null; }
-            if (data && data.status === 'success') { removePendingAction(bon); if (!currentDrawerPage) renderCurrentTab(false); }
+            if (data && data.status === 'success') {
+                removePendingAction(bon);
+                if (typeof data.wallet !== 'undefined') handleWalletUpdate(data.wallet); // 🆕 تصحيح الرصيد بالقيمة الحقيقية من الشيت
+                if (!currentDrawerPage) renderCurrentTab(false);
+            }
         })
         .catch(function() { console.error('تعذر إبلاغ السيرفر بالتوصيل - هيتم إعادة المحاولة تلقائياً'); });
 }
